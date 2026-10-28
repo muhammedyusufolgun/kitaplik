@@ -183,7 +183,7 @@ class MainActivity : Activity() {
  uris.forEach{uri->try{var name="Kitap.pdf";contentResolver.query(uri,null,null,null,null)?.use{if(it.moveToFirst()){val n=it.getColumnIndex(OpenableColumns.DISPLAY_NAME);if(n>=0)name=it.getString(n)}};val f=File(filesDir,"book_${System.nanoTime()}.pdf");contentResolver.openInputStream(uri)!!.use{input->f.outputStream().use{input.copyTo(it)}};val empty=books.indexOfFirst{it.path.isEmpty()};if(empty>=0)books[empty]=Book(name,f.path) else books.add(Book(name,f.path))}catch(e:Exception){Toast.makeText(this,"Dosya eklenemedi: ${e.message}",Toast.LENGTH_LONG).show()}};save();home()
  }else if(requestCode==pickCover&&coverIndex in books.indices){try{val f=File(filesDir,"cover_${System.nanoTime()}.png");contentResolver.openInputStream(data.data!!)!!.use{input->f.outputStream().use{input.copyTo(it)}};books[coverIndex].cover=f.path;save();home()}catch(e:Exception){Toast.makeText(this,"Kapak açılamadı",Toast.LENGTH_SHORT).show()}}}
  private fun closePdf(){try{renderer?.close();descriptor?.close()}catch(_:Exception){};renderer=null;descriptor=null}
- private fun openBook(i:Int){try{closePdf();descriptor=android.os.ParcelFileDescriptor.open(File(books[i].path),android.os.ParcelFileDescriptor.MODE_READ_ONLY);renderer=PdfRenderer(descriptor!!);current=i;page=books[i].bookmark.takeIf{it>=0}?:0;page=page.coerceIn(0,renderer!!.pageCount-1);reader()}catch(e:Exception){Toast.makeText(this,"PDF açılamadı: ${e.message}",Toast.LENGTH_LONG).show();home()}}
+ private fun openBook(i:Int){try{closePdf();descriptor=android.os.ParcelFileDescriptor.open(File(books[i].path),android.os.ParcelFileDescriptor.MODE_READ_ONLY);renderer=PdfRenderer(descriptor!!);current=i;page=books[i].bookmark.takeIf{it>=0}?:0;page=page.coerceIn(0,renderer!!.pageCount-1);zoom=1f;reader()}catch(e:Exception){Toast.makeText(this,"PDF açılamadı: ${e.message}",Toast.LENGTH_LONG).show();home()}}
  private fun reader(){
   val r=renderer?:return
   init(books[current].name)
@@ -221,7 +221,7 @@ class MainActivity : Activity() {
   val screenWidth=resources.displayMetrics.widthPixels
   for(i in 0 until r.pageCount){
    val p=r.openPage(i)
-   val pw=p.width;val ph=p.height;p.close()
+   val pw=p.width.coerceAtLeast(1);val ph=p.height.coerceAtLeast(1);p.close()
    val w=screenWidth.coerceAtLeast(1)
    val h=(w.toFloat()*ph/pw).toInt().coerceAtLeast(1)
    pageWidths.add(w);pageHeights.add(h)
@@ -246,19 +246,25 @@ class MainActivity : Activity() {
      if(distance<bestDistance){bestDistance=distance;active=i}
      val visible=y+h>=top-scroll.height && y<=bottom+scroll.height
      if(visible && images[i].drawable==null){
-      val p=r.openPage(i)
       try{
-       val w=(pageWidths[i]*zoom).toInt().coerceIn(200,2400)
-       val bh=(pageHeights[i]*zoom).toInt().coerceIn(200,3400)
-       val bmp=Bitmap.createBitmap(w,bh,Bitmap.Config.RGB_565)
-       bmp.eraseColor(Color.WHITE)
-       p.render(bmp,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-       images[i].setImageBitmap(bmp)
-      }finally{p.close()}
+       val p=r.openPage(i)
+       try{
+        val w=(pageWidths[i]*zoom).toInt().coerceIn(200,1200)
+        val bh=(pageHeights[i]*zoom).toInt().coerceIn(200,1800)
+        val bmp=Bitmap.createBitmap(w,bh,Bitmap.Config.RGB_565)
+        bmp.eraseColor(Color.WHITE)
+        p.render(bmp,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+        images[i].setImageBitmap(bmp)
+       }finally{p.close()}
+      }catch(e:Exception){
+       android.util.Log.e("Kitaplik","PDF sayfası ${i+1} çizilemedi",e)
+      }catch(e:OutOfMemoryError){
+       android.util.Log.e("Kitaplik","PDF görüntüleme belleği yetersiz",e)
+       images.forEach{it.setImageDrawable(null)}
+       System.gc()
+      }
      }else if(!visible && images[i].drawable!=null){
-      val old=images[i].drawable
       images[i].setImageDrawable(null)
-      if(old is android.graphics.drawable.BitmapDrawable)old.bitmap.recycle()
      }
      y+=h
     }
@@ -277,7 +283,7 @@ class MainActivity : Activity() {
     images[i].layoutParams=lp
     val old=images[i].drawable
     images[i].setImageDrawable(null)
-    if(old is android.graphics.drawable.BitmapDrawable)old.bitmap.recycle()
+    // Drawable is detached; Android manages bitmap lifetime.
    }
    column.requestLayout()
    scroll.post{updateVisible()}
