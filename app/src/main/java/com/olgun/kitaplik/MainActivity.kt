@@ -36,6 +36,7 @@ class MainActivity : Activity() {
  private var page=0
  private var zoom=1f
  private var brightness=1f
+ private var contrast=1f
  private var landscape=false
  private var renderer:PdfRenderer?=null
  private var descriptor:android.os.ParcelFileDescriptor?=null
@@ -214,7 +215,9 @@ class MainActivity : Activity() {
   val column=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE)}
   horizontal.addView(column,android.widget.FrameLayout.LayoutParams(-2,-2))
   scroll.addView(horizontal,android.widget.FrameLayout.LayoutParams(-1,-2))
-  root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
+  val readerFrame=android.widget.FrameLayout(this)
+  readerFrame.addView(scroll,android.widget.FrameLayout.LayoutParams(-1,-1))
+  root.addView(readerFrame,LinearLayout.LayoutParams(-1,0,1f))
   val images=ArrayList<ImageView>()
   val pageHeights=ArrayList<Int>()
   val pageWidths=ArrayList<Int>()
@@ -229,6 +232,12 @@ class MainActivity : Activity() {
    images.add(img)
    column.addView(img,LinearLayout.LayoutParams(w,h).apply{bottomMargin=dp(3)})
   }
+  fun applyContrast(){
+   val offset=128f*(1f-contrast)
+   val matrix=ColorMatrix(floatArrayOf(contrast,0f,0f,0f,offset, 0f,contrast,0f,0f,offset, 0f,0f,contrast,0f,offset, 0f,0f,0f,1f,0f))
+   images.forEach{it.colorFilter=ColorMatrixColorFilter(matrix)}
+  }
+  applyContrast()
   fun renderPage(i:Int){
    if(i !in images.indices || images[i].drawable!=null)return
    try{
@@ -236,7 +245,7 @@ class MainActivity : Activity() {
     try{
      val w=pageWidths[i].coerceIn(200,1200)
      val h=pageHeights[i].coerceIn(200,1800)
-     val bmp=Bitmap.createBitmap(w,h,Bitmap.Config.RGB_565)
+     val bmp=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888)
      bmp.eraseColor(Color.WHITE)
      p.render(bmp,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
      images[i].setImageBitmap(bmp)
@@ -291,20 +300,13 @@ class MainActivity : Activity() {
     return true
    }
   })
-  var downX=0f;var downY=0f;var lastY=0f;var startBrightness=brightness
+  var downX=0f;var downY=0f
   var taps=0;var lastTap=0L;var multiTouch=false
   scroll.setOnTouchListener{_,event->
    scale.onTouchEvent(event)
    when(event.actionMasked){
-    MotionEvent.ACTION_DOWN->{downX=event.x;downY=event.y;lastY=event.y;startBrightness=brightness;multiTouch=false}
+    MotionEvent.ACTION_DOWN->{downX=event.x;downY=event.y;multiTouch=false}
     MotionEvent.ACTION_POINTER_DOWN->{multiTouch=true}
-    MotionEvent.ACTION_MOVE->{
-     if(!multiTouch&&downX<dp(65)&&kotlin.math.abs(event.y-downY)>dp(8)){
-      brightness=(startBrightness+(downY-event.y)/dp(200).toFloat()).coerceIn(0.05f,1f)
-      window.attributes=window.attributes.apply{screenBrightness=brightness}
-      return@setOnTouchListener true
-     }
-    }
     MotionEvent.ACTION_UP->{
      if(!multiTouch&&kotlin.math.abs(event.y-downY)<dp(20)&&kotlin.math.abs(event.x-downX)<dp(20)){
       val now=android.os.SystemClock.uptimeMillis()
@@ -314,6 +316,22 @@ class MainActivity : Activity() {
     }
    }
    multiTouch||scale.isInProgress
+  }
+  // Kontrast sadece ekranın sol kenarındaki özel dokunma şeridinden ayarlanır.
+  val contrastEdge=View(this).apply{setBackgroundColor(Color.TRANSPARENT)}
+  readerFrame.addView(contrastEdge,android.widget.FrameLayout.LayoutParams(dp(28),-1,Gravity.LEFT))
+  var edgeStartY=0f
+  var edgeStartContrast=contrast
+  contrastEdge.setOnTouchListener{_,event->
+   when(event.actionMasked){
+    MotionEvent.ACTION_DOWN->{edgeStartY=event.y;edgeStartContrast=contrast;true}
+    MotionEvent.ACTION_MOVE->{
+     contrast=(edgeStartContrast+(edgeStartY-event.y)/dp(240).toFloat()).coerceIn(0.5f,2.5f)
+     applyContrast()
+     true
+    }
+    else->true
+   }
   }
   refreshBookmark()
   zoomLabel.text="${(zoom*100).toInt()}%"
