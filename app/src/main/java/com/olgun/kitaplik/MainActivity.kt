@@ -23,6 +23,11 @@ class MainActivity : Activity() {
  private val prefs by lazy { getSharedPreferences("books",MODE_PRIVATE) }
  private var sorting=false
  private var editMode=false
+ private val modeHandler=Handler(Looper.getMainLooper())
+ private var modeTimeout:Runnable?=null
+ private fun cancelModeTimeout(){modeTimeout?.let{modeHandler.removeCallbacks(it)};modeTimeout=null}
+ private fun scheduleModeTimeout(){cancelModeTimeout();if(sorting||editMode){val task=Runnable{if(current<0&&(sorting||editMode)){sorting=false;editMode=false;selectedMove=-1;home()}};modeTimeout=task;modeHandler.postDelayed(task,5000)}}
+ private fun exitEditMode(){if(sorting||editMode){sorting=false;editMode=false;selectedMove=-1;cancelModeTimeout();home()}}
  private val selectedDelete=mutableSetOf<Int>()
  private val pickPdf=100
  private val pickCover=101
@@ -58,14 +63,14 @@ class MainActivity : Activity() {
  private fun home(){
   current=-1;closePdf();init("Kitaplık")
   val header=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),0,dp(8),0)}
-  header.addView(text("Kitaplık",24f,true).apply{gravity=Gravity.CENTER_VERTICAL or Gravity.START},LinearLayout.LayoutParams(0,dp(60),1f))
+  header.addView(text("Kitaplık",24f,true).apply{gravity=Gravity.CENTER_VERTICAL or Gravity.START;setOnClickListener{exitEditMode()}},LinearLayout.LayoutParams(0,dp(60),1f))
   val menuButton=button("☰ Menü"){menu()}
   menuButton.textSize=14f
   header.addView(menuButton,LinearLayout.LayoutParams(dp(128),dp(52)))
   root.addView(header,LinearLayout.LayoutParams(-1,dp(68)))
   val sc=ScrollView(this).apply{clipToPadding=false;setPadding(dp(5),dp(10),dp(5),dp(12))}
   root.addView(sc,LinearLayout.LayoutParams(-1,0,1f))
-  val stack=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE)}
+  val stack=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE);setOnClickListener{exitEditMode()}}
   sc.addView(stack)
   val rows=maxOf(4,(books.size+3)/4)
   for(r in 0 until rows){
@@ -76,7 +81,8 @@ class MainActivity : Activity() {
     setPadding(dp(7),dp(12),dp(7),dp(5))
     elevation=dp(3).toFloat()
    }
-   val row=LinearLayout(this).apply{gravity=Gravity.BOTTOM;setPadding(dp(3),dp(4),dp(3),dp(2))}
+   shelf.setOnClickListener{exitEditMode()}
+   val row=LinearLayout(this).apply{gravity=Gravity.BOTTOM;setPadding(dp(3),dp(4),dp(3),dp(2));setOnClickListener{exitEditMode()}}
    for(col in 0..3){
     val i=r*4+col
     val slot=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL;setPadding(dp(2),dp(2),dp(2),dp(3))}
@@ -87,18 +93,18 @@ class MainActivity : Activity() {
       elevation=dp(2).toFloat()
       coverBitmap(books[i])?.let{setImageBitmap(it)}?:setImageResource(android.R.drawable.ic_menu_report_image)
      }
-     slot.addView(cover,LinearLayout.LayoutParams(-1,dp(90)))
+     slot.addView(cover,LinearLayout.LayoutParams(-1,dp(111)))
 
      slot.setOnClickListener{
-      if(editMode){coverDialog(i)}else if(deleteMode){if(!selectedDelete.add(i))selectedDelete.remove(i);slot.alpha=if(i in selectedDelete)0.45f else 1f}else if(sorting){
-       if(selectedMove<0){selectedMove=i;Toast.makeText(this,"Şimdi hedef kitaba dokunun",Toast.LENGTH_SHORT).show()}
+      if(editMode){cancelModeTimeout();editMode=false;coverDialog(i)}else if(deleteMode){if(!selectedDelete.add(i))selectedDelete.remove(i);slot.alpha=if(i in selectedDelete)0.45f else 1f}else if(sorting){
+       if(selectedMove<0){selectedMove=i;scheduleModeTimeout();Toast.makeText(this,"Şimdi hedef kitaba dokunun",Toast.LENGTH_SHORT).show()}
        else{val moved=books.removeAt(selectedMove);books.add(i.coerceAtMost(books.size),moved);selectedMove=-1;save();home()}
       }else openBook(i)
      }
      if(deleteMode&&i in selectedDelete)slot.alpha=0.45f
      if(sorting)slot.setOnLongClickListener{
       val clip=ClipData.newPlainText("book",i.toString())
-      slot.startDragAndDrop(clip,View.DragShadowBuilder(slot),null,0);true
+      cancelModeTimeout();slot.startDragAndDrop(clip,View.DragShadowBuilder(slot),null,0);true
      }
      if(sorting)slot.setOnDragListener{_,event->
       if(event.action==DragEvent.ACTION_DROP){
@@ -108,18 +114,20 @@ class MainActivity : Activity() {
       }else true
      }
     }else{
-     slot.addView(View(this),LinearLayout.LayoutParams(-1,dp(111)))
+     slot.addView(View(this).apply{setOnClickListener{exitEditMode()}},LinearLayout.LayoutParams(-1,dp(111)))
      if(sorting)slot.setOnDragListener{_,event->
       if(event.action==DragEvent.ACTION_DROP){val source=event.clipData.getItemAt(0).text.toString().toIntOrNull();if(source!=null&&source in books.indices){val moved=books.removeAt(source);books.add(i.coerceAtMost(books.size),moved);save();home()};true}else true
      }
     }
-    row.addView(slot,LinearLayout.LayoutParams(0,dp(120),1f))
+    row.addView(slot,LinearLayout.LayoutParams(0,dp(125),1f))
    }
    shelf.addView(row)
    val top=View(this).apply{background=wood(Color.rgb(173,111,59))}
+   top.setOnClickListener{exitEditMode()}
    shelf.addView(top,LinearLayout.LayoutParams(-1,dp(15)))
    val edge=View(this).apply{background=GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
     intArrayOf(Color.rgb(103,57,28),Color.rgb(76,40,23)))}
+   edge.setOnClickListener{exitEditMode()}
    shelf.addView(edge,LinearLayout.LayoutParams(-1,dp(7)))
    val lp=LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(18)}
    stack.addView(shelf,lp)
@@ -127,7 +135,8 @@ class MainActivity : Activity() {
   if(sorting)root.addView(text("Sıralama: Kitaba uzun basıp hedef konuma sürükleyin.",12f))
   if(editMode)root.addView(button("Kapak düzenlemeyi bitir"){editMode=false;home()})
   if(deleteMode){val actions=LinearLayout(this);actions.addView(button("Seçilenleri Sil"){if(selectedDelete.isNotEmpty())AlertDialog.Builder(this).setTitle("Sil").setMessage("Seçilen kitaplar silinsin mi?").setPositiveButton("Devam"){_,_->AlertDialog.Builder(this).setTitle("Emin misin?").setPositiveButton("Evet, sil"){_,_->selectedDelete.sortedDescending().forEach{books.removeAt(it)};selectedDelete.clear();deleteMode=false;save();home()}.setNegativeButton("Vazgeç",null).show()}.setNegativeButton("İptal",null).show()},LinearLayout.LayoutParams(0,-2,1f));actions.addView(button("İptal"){deleteMode=false;selectedDelete.clear();home()},LinearLayout.LayoutParams(0,-2,1f));root.addView(actions)}
-  root.addView(text("Muhammed Yusuf OLGUN",13f,true).apply{setPadding(8,0,8,dp(28))},LinearLayout.LayoutParams(-1,-2))
+  root.addView(text("Muhammed Yusuf OLGUN",13f,true).apply{setPadding(8,0,8,dp(12))},LinearLayout.LayoutParams(-1,-2))
+  scheduleModeTimeout()
  }
  private var selectedMove=-1
  private var deleteMode=false
@@ -215,5 +224,5 @@ class MainActivity : Activity() {
   if(current>=0)reader() else home()
  }
  override fun onBackPressed(){if(current>=0){requestedOrientation=android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;home()}else super.onBackPressed()}
- override fun onDestroy(){closePdf();super.onDestroy()}
+ override fun onDestroy(){cancelModeTimeout();closePdf();super.onDestroy()}
 }
