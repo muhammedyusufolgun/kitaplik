@@ -39,31 +39,86 @@ class MainActivity : Activity() {
  private fun button(s:String,action:()->Unit)=Button(this).apply{text=s;setAllCaps(false);setOnClickListener{action()}}
  private fun init(title:String){root=LinearLayout(this).apply{orientation=1;setBackgroundColor(Color.WHITE);setPadding(8,4,8,4)};setContentView(root);val head=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL};head.addView(text(title,24f,true),LinearLayout.LayoutParams(0,-2,1f));root.addView(head)}
  private fun footer(){root.addView(text("Muhammed Yusuf OLGUN",13f,true),LinearLayout.LayoutParams(-1,-2))}
- private fun menu(anchor:View){val p=PopupMenu(this,anchor);listOf("Dosya ekle","Dosya sırala","Dosya Kapak Düzenle","Dosya sil").forEach{p.menu.add(it)};p.setOnMenuItemClickListener{when(it.title.toString()){
- "Dosya ekle"->pickPdf()
- "Dosya sırala"->{sorting=!sorting;home()}
- "Dosya Kapak Düzenle"->chooseBook("Kapak düzenle"){coverDialog(it)}
- "Dosya sil"->deleteDialog()
- };true};p.show()}
- private fun home(){current=-1;closePdf();init("Kitaplık");val bar=root.getChildAt(0) as LinearLayout;val m=button("☰ Menü"){menu(bar.getChildAt(1))};bar.addView(m)
- val sc=ScrollView(this);root.addView(sc,LinearLayout.LayoutParams(-1,0,1f))
- val stack=LinearLayout(this).apply{orientation=1};sc.addView(stack)
- val rows=maxOf(5,(books.size+4)/5)
- for(r in 0 until rows){val shelf=LinearLayout(this).apply{orientation=1;setBackgroundColor(Color.rgb(237,220,198));setPadding(4,8,4,0)}
- val row=LinearLayout(this).apply{gravity=Gravity.BOTTOM}
- for(c in 0..4){val i=r*5+c;val item=LinearLayout(this).apply{orientation=1;gravity=Gravity.CENTER}
- if(i<books.size){val image=ImageView(this).apply{scaleType=ImageView.ScaleType.CENTER_CROP;setBackgroundColor(Color.WHITE);setPadding(2,2,2,2)}
- val bmp=coverBitmap(books[i]);if(bmp!=null)image.setImageBitmap(bmp)
- else image.setImageResource(android.R.drawable.ic_menu_report_image)
- item.addView(image,LinearLayout.LayoutParams(-1,120))
- item.addView(text("OKU",12f,true))
- item.setOnClickListener{if(sorting){if(selectedMove<0){selectedMove=i;Toast.makeText(this,"Taşınacak konum için başka kitaba dokunun",Toast.LENGTH_SHORT).show()}else{val moved=books.removeAt(selectedMove);books.add(i.coerceAtMost(books.size),moved);selectedMove=-1;save();home()}}else openBook(i)}
- item.setOnLongClickListener{if(sorting){selectedMove=i;true}else false}
- }else item.addView(text(" ",12f),LinearLayout.LayoutParams(-1,152))
- row.addView(item,LinearLayout.LayoutParams(0,-2,1f))}
- shelf.addView(row);shelf.addView(View(this).apply{setBackgroundColor(Color.rgb(114,67,36));elevation=5f},LinearLayout.LayoutParams(-1,12));stack.addView(shelf)}
- if(sorting)root.addView(text("Sıralama: Taşınacak kitabı, ardından hedef kitabı seçin.",12f))
- footer()}
+ private fun dp(n:Int):Int=(resources.displayMetrics.density*n).toInt()
+ private fun menu(){
+  val options=arrayOf("Dosya ekle","Dosya sırala","Dosya Kapak Düzenle","Dosya sil")
+  AlertDialog.Builder(this).setTitle("Kitaplık Menüsü").setItems(options){_,which->
+   when(which){
+    0->pickPdf()
+    1->{sorting=!sorting;selectedMove=-1;home()}
+    2->chooseBook("Kapak düzenle"){coverDialog(it)}
+    3->deleteDialog()
+   }
+  }.setNegativeButton("Kapat",null).show()
+ }
+ private fun wood(color:Int):GradientDrawable=GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+  intArrayOf(Color.rgb(247,222,181),color,Color.rgb(102,59,32))).apply{cornerRadius=dp(5).toFloat()}
+ private fun home(){
+  current=-1;closePdf();init("Kitaplık")
+  val bar=root.getChildAt(0) as LinearLayout
+  val menuButton=button("☰ Menü"){menu()}
+  menuButton.textSize=14f
+  bar.addView(menuButton,LinearLayout.LayoutParams(dp(108),dp(54)))
+  val sc=ScrollView(this).apply{clipToPadding=false;setPadding(dp(5),dp(10),dp(5),dp(12))}
+  root.addView(sc,LinearLayout.LayoutParams(-1,0,1f))
+  val stack=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE)}
+  sc.addView(stack)
+  val rows=maxOf(5,(books.size+4)/5)
+  for(r in 0 until rows){
+   val shelf=LinearLayout(this).apply{
+    orientation=LinearLayout.VERTICAL
+    background=GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+      intArrayOf(Color.rgb(119,72,39),Color.rgb(230,186,126),Color.rgb(122,75,42))).apply{cornerRadius=dp(9).toFloat()}
+    setPadding(dp(7),dp(12),dp(7),dp(5))
+    elevation=dp(3).toFloat()
+   }
+   val row=LinearLayout(this).apply{gravity=Gravity.BOTTOM;setPadding(dp(3),dp(4),dp(3),dp(2))}
+   for(col in 0..4){
+    val i=r*5+col
+    val slot=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL;setPadding(dp(2),dp(2),dp(2),dp(3))}
+    if(i<books.size){
+     val cover=ImageView(this).apply{
+      scaleType=ImageView.ScaleType.FIT_CENTER
+      setBackgroundColor(Color.rgb(255,253,249))
+      elevation=dp(2).toFloat()
+      coverBitmap(books[i])?.let{setImageBitmap(it)}?:setImageResource(android.R.drawable.ic_menu_report_image)
+     }
+     slot.addView(cover,LinearLayout.LayoutParams(-1,dp(90)))
+     slot.addView(text("OKU",11f,true).apply{setPadding(0,dp(2),0,0)})
+     slot.setOnClickListener{
+      if(sorting){
+       if(selectedMove<0){selectedMove=i;Toast.makeText(this,"Şimdi hedef kitaba dokunun",Toast.LENGTH_SHORT).show()}
+       else{val moved=books.removeAt(selectedMove);books.add(i.coerceAtMost(books.size),moved);selectedMove=-1;save();home()}
+      }else openBook(i)
+     }
+     if(sorting)slot.setOnLongClickListener{
+      val clip=ClipData.newPlainText("book",i.toString())
+      slot.startDragAndDrop(clip,View.DragShadowBuilder(slot),null,0);true
+     }
+     if(sorting)slot.setOnDragListener{_,event->
+      if(event.action==DragEvent.ACTION_DROP){
+       val source=event.clipData.getItemAt(0).text.toString().toIntOrNull()
+       if(source!=null&&source in books.indices){val moved=books.removeAt(source);books.add(i.coerceAtMost(books.size),moved);save();home()}
+       true
+      }else true
+     }
+    }else{
+     slot.addView(View(this),LinearLayout.LayoutParams(-1,dp(111)))
+    }
+    row.addView(slot,LinearLayout.LayoutParams(0,dp(120),1f))
+   }
+   shelf.addView(row)
+   val top=View(this).apply{background=wood(Color.rgb(173,111,59))}
+   shelf.addView(top,LinearLayout.LayoutParams(-1,dp(15)))
+   val edge=View(this).apply{background=GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+    intArrayOf(Color.rgb(103,57,28),Color.rgb(76,40,23)))}
+   shelf.addView(edge,LinearLayout.LayoutParams(-1,dp(7)))
+   val lp=LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(18)}
+   stack.addView(shelf,lp)
+  }
+  if(sorting)root.addView(text("Sıralama açık: Kitaba uzun basıp sürükleyin.",12f))
+  footer()
+ }
  private var selectedMove=-1
  private fun coverBitmap(b:Book):Bitmap?{return try{if(b.cover.isNotEmpty()&&File(b.cover).exists())BitmapFactory.decodeFile(b.cover)?.let{Bitmap.createScaledBitmap(it,160,220,true)}else{val fd=android.os.ParcelFileDescriptor.open(File(b.path),android.os.ParcelFileDescriptor.MODE_READ_ONLY);val r=PdfRenderer(fd);val p=r.openPage(0);val bmp=Bitmap.createBitmap(160,220,Bitmap.Config.ARGB_8888);bmp.eraseColor(Color.WHITE);p.render(bmp,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);p.close();r.close();fd.close();bmp}}catch(e:Exception){null}}
  private fun pickPdf(){val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply{type="application/pdf";addCategory(Intent.CATEGORY_OPENABLE);putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true)};startActivityForResult(intent,pickPdf)}
