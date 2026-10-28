@@ -26,8 +26,8 @@ class MainActivity : Activity() {
  private val modeHandler=Handler(Looper.getMainLooper())
  private var modeTimeout:Runnable?=null
  private fun cancelModeTimeout(){modeTimeout?.let{modeHandler.removeCallbacks(it)};modeTimeout=null}
- private fun scheduleModeTimeout(){cancelModeTimeout();if(sorting||editMode){val task=Runnable{if(current<0&&(sorting||editMode)){sorting=false;editMode=false;selectedMove=-1;home()}};modeTimeout=task;modeHandler.postDelayed(task,5000)}}
- private fun exitEditMode(){if(sorting||editMode){sorting=false;editMode=false;selectedMove=-1;cancelModeTimeout();home()}}
+ private fun scheduleModeTimeout(){cancelModeTimeout();if(sorting||editMode||deleteMode){val task=Runnable{if(current<0&&(sorting||editMode||deleteMode)){sorting=false;editMode=false;deleteMode=false;selectedDelete.clear();selectedMove=-1;home()}};modeTimeout=task;modeHandler.postDelayed(task,5000)}}
+ private fun exitEditMode(){if(sorting||editMode||deleteMode){sorting=false;editMode=false;deleteMode=false;selectedDelete.clear();selectedMove=-1;cancelModeTimeout();home()}}
  private val selectedDelete=mutableSetOf<Int>()
  private val pickPdf=100
  private val pickCover=101
@@ -49,9 +49,10 @@ class MainActivity : Activity() {
  private fun dp(n:Int):Int=(resources.displayMetrics.density*n).toInt()
  private fun menu(){
   val options=arrayOf("Dosya ekle","Dosya sırala","Dosya sil")
+  cancelModeTimeout()
   AlertDialog.Builder(this).setTitle("Kitaplık Menüsü").setItems(options){_,which->
    when(which){
-    0->pickPdf()
+    0->{sorting=false;editMode=false;deleteMode=false;selectedDelete.clear();pickPdf()}
     1->{sorting=!sorting;editMode=false;selectedMove=-1;home()}
     2->{editMode=false;sorting=false;deleteMode=true;selectedDelete.clear();home()}
    }
@@ -114,6 +115,7 @@ class MainActivity : Activity() {
      }
     }else{
      slot.addView(View(this).apply{setOnClickListener{exitEditMode()}},LinearLayout.LayoutParams(-1,dp(111)))
+     slot.setOnClickListener{exitEditMode()}
      if(sorting)slot.setOnDragListener{_,event->
       if(event.action==DragEvent.ACTION_DROP){val source=event.clipData.getItemAt(0).text.toString().toIntOrNull();if(source!=null&&source in books.indices && books[source].path.isNotEmpty()){moveBook(source,i);home()};true}else true
      }
@@ -133,8 +135,8 @@ class MainActivity : Activity() {
   }
   if(sorting)root.addView(text("Sıralama: Kitaba uzun basıp hedef konuma sürükleyin.",12f))
   if(editMode)root.addView(button("Kapak düzenlemeyi bitir"){editMode=false;home()})
-  if(deleteMode){val actions=LinearLayout(this);actions.addView(button("Seçilenleri Sil"){if(selectedDelete.isNotEmpty())AlertDialog.Builder(this).setTitle("Sil").setMessage("Seçilen kitaplar silinsin mi?").setPositiveButton("Devam"){_,_->AlertDialog.Builder(this).setTitle("Emin misin?").setPositiveButton("Evet, sil"){_,_->selectedDelete.sortedDescending().forEach{books.removeAt(it)};selectedDelete.clear();deleteMode=false;save();home()}.setNegativeButton("Vazgeç",null).show()}.setNegativeButton("İptal",null).show()},LinearLayout.LayoutParams(0,-2,1f));actions.addView(button("İptal"){deleteMode=false;selectedDelete.clear();home()},LinearLayout.LayoutParams(0,-2,1f));root.addView(actions)}
-  root.addView(text("Muhammed Yusuf OLGUN",13f,true).apply{setPadding(8,0,8,0)},LinearLayout.LayoutParams(-1,-2))
+  if(deleteMode){val actions=LinearLayout(this).apply{setPadding(dp(8),0,dp(8),dp(12))};actions.addView(button("Seçilenleri Sil"){if(selectedDelete.isNotEmpty())AlertDialog.Builder(this).setTitle("Sil").setMessage("Seçilen kitaplar silinsin mi?").setPositiveButton("Devam"){_,_->AlertDialog.Builder(this).setTitle("Emin misin?").setPositiveButton("Evet, sil"){_,_->selectedDelete.sortedDescending().forEach{books.removeAt(it)};selectedDelete.clear();deleteMode=false;save();home()}.setNegativeButton("Vazgeç",null).show()}.setNegativeButton("İptal",null).show()},LinearLayout.LayoutParams(0,-2,1f));actions.addView(button("İptal"){deleteMode=false;selectedDelete.clear();home()},LinearLayout.LayoutParams(0,-2,1f));root.addView(actions,LinearLayout.LayoutParams(-1,dp(84)))}
+  root.addView(text("Muhammed Yusuf OLGUN",13f,true).apply{setPadding(8,0,8,dp(12))},LinearLayout.LayoutParams(-1,-2))
   scheduleModeTimeout()
  }
  private fun moveBook(source:Int,target:Int){
@@ -172,7 +174,8 @@ class MainActivity : Activity() {
   val bookmarkButton=text("",14f,true).apply{setPadding(2,0,2,0)}
   root.addView(bookmarkButton,LinearLayout.LayoutParams(-1,dp(36)))
   fun refreshBookmark(){bookmarkButton.text=if(books[current].bookmark==page)"Sayfa Ayıracını Kaldır" else "Sayfa Ayıracı Ekle"}
-  bookmarkButton.setOnClickListener{books[current].bookmark=if(books[current].bookmark==page)-1 else page;save();refreshBookmark()}
+  fun toggleBookmark(){books[current].bookmark=if(books[current].bookmark==page)-1 else page;save();refreshBookmark();status.text="${page+1} / ${r.pageCount}    ${if(books[current].bookmark==page)"🔖" else ""}";Toast.makeText(this,if(books[current].bookmark==page)"Sayfa imi eklendi" else "Sayfa imi kaldırıldı",Toast.LENGTH_SHORT).show()}
+  bookmarkButton.setOnClickListener{toggleBookmark()}
   val image=ImageView(this).apply{scaleType=ImageView.ScaleType.MATRIX;setBackgroundColor(Color.WHITE)}
   root.addView(image,LinearLayout.LayoutParams(-1,0,1f))
   var baseWidth=1f
@@ -237,7 +240,7 @@ class MainActivity : Activity() {
        val now=android.os.SystemClock.uptimeMillis()
        taps=if(now-lastTap<450)taps+1 else 1
        lastTap=now
-       if(taps>=3){books[current].bookmark=if(books[current].bookmark==page)-1 else page;save();render();taps=0;Toast.makeText(this,if(books[current].bookmark==page)"Sayfa imi eklendi" else "Sayfa imi kaldırıldı",Toast.LENGTH_SHORT).show()}
+       if(taps>=3){toggleBookmark();taps=0}
       }
      };true
     }
