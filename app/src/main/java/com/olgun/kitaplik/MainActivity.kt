@@ -44,7 +44,7 @@ class MainActivity : Activity() {
  private fun save(){val a=JSONArray(); books.forEach { a.put(JSONObject().put("name",it.name).put("path",it.path).put("cover",it.cover).put("bookmark",it.bookmark)) };prefs.edit().putString("items",a.toString()).apply()}
  private fun text(s:String,size:Float=16f,bold:Boolean=false):TextView=TextView(this).apply{ text=s;textSize=size;setTextColor(Color.rgb(50,50,50));gravity=Gravity.CENTER;setPadding(8,10,8,10);if(bold)setTypeface(null,1)}
  private fun button(s:String,action:()->Unit)=Button(this).apply{text=s;setAllCaps(false);setOnClickListener{action()}}
- private fun init(title:String){root=LinearLayout(this).apply{orientation=1;setBackgroundColor(Color.WHITE);setPadding(8,dp(20),8,4)};setContentView(root)}
+ private fun init(title:String){root=LinearLayout(this).apply{orientation=1;setBackgroundColor(Color.WHITE);setPadding(8,dp(26),8,4)};setContentView(root)}
  private fun footer(){root.addView(text("Muhammed Yusuf OLGUN",13f,true),LinearLayout.LayoutParams(-1,-2))}
  private fun dp(n:Int):Int=(resources.displayMetrics.density*n).toInt()
  private fun menu(){
@@ -96,7 +96,7 @@ class MainActivity : Activity() {
      slot.addView(cover,LinearLayout.LayoutParams(-1,dp(111)))
 
      slot.setOnClickListener{
-      if(editMode){cancelModeTimeout();editMode=false;coverDialog(i)}else if(deleteMode){if(!selectedDelete.add(i))selectedDelete.remove(i);slot.alpha=if(i in selectedDelete)0.45f else 1f}else if(sorting){
+      if(editMode){cancelModeTimeout();editMode=false;coverDialog(i)}else if(deleteMode){if(!selectedDelete.add(i))selectedDelete.remove(i);slot.alpha=if(i in selectedDelete)0.45f else 1f;scheduleModeTimeout()}else if(sorting){
        if(selectedMove<0){selectedMove=i;scheduleModeTimeout();Toast.makeText(this,"Şimdi hedef kitaba dokunun",Toast.LENGTH_SHORT).show()}
        else{moveBook(selectedMove,i);selectedMove=-1;home()}
       }else openBook(i)
@@ -136,7 +136,25 @@ class MainActivity : Activity() {
   stack.addView(text("Muhammed Yusuf OLGUN",13f,true).apply{setTextColor(Color.rgb(170,170,170));setPadding(dp(8),0,dp(8),0);gravity=Gravity.CENTER},LinearLayout.LayoutParams(-1,dp(26)))
   if(sorting)root.addView(text("Sıralama: Kitaba uzun basıp hedef konuma sürükleyin.",12f))
   if(editMode)root.addView(button("Kapak düzenlemeyi bitir"){editMode=false;home()})
-  if(deleteMode){val actions=LinearLayout(this).apply{setPadding(dp(8),0,dp(8),dp(12))};actions.addView(button("Seçilenleri Sil"){if(selectedDelete.isNotEmpty())AlertDialog.Builder(this).setTitle("Sil").setMessage("Seçilen kitaplar silinsin mi?").setPositiveButton("Devam"){_,_->AlertDialog.Builder(this).setTitle("Emin misin?").setPositiveButton("Evet, sil"){_,_->selectedDelete.sortedDescending().forEach{books.removeAt(it)};selectedDelete.clear();deleteMode=false;save();home()}.setNegativeButton("Vazgeç",null).show()}.setNegativeButton("İptal",null).show()},LinearLayout.LayoutParams(0,-2,1f));actions.addView(button("İptal"){deleteMode=false;selectedDelete.clear();home()},LinearLayout.LayoutParams(0,-2,1f));root.addView(actions,LinearLayout.LayoutParams(-1,dp(84)))}
+  if(deleteMode){
+   val actions=LinearLayout(this).apply{setPadding(dp(8),0,dp(8),dp(12))}
+   actions.addView(button("Seçilenleri Sil"){
+    if(selectedDelete.isEmpty()){Toast.makeText(this,"Silinecek kitap seçin",Toast.LENGTH_SHORT).show()}
+    else{
+     cancelModeTimeout()
+     AlertDialog.Builder(this).setTitle("Sil").setMessage("${selectedDelete.size} kitap kitaplıktan silinsin mi?")
+      .setPositiveButton("Devam"){_,_->
+       AlertDialog.Builder(this).setTitle("Emin misin?").setMessage("Seçilen kitaplar kitaplıktan kaldırılacak.")
+        .setPositiveButton("Evet, sil"){_,_->
+         selectedDelete.filter{it in books.indices && books[it].path.isNotEmpty()}.sortedDescending().forEach{books[it]=Book("","")}
+         selectedDelete.clear();deleteMode=false;save();home()
+        }.setNegativeButton("Vazgeç"){_,_->scheduleModeTimeout()}.show()
+      }.setNegativeButton("İptal"){_,_->scheduleModeTimeout()}.show()
+    }
+   },LinearLayout.LayoutParams(0,-2,1f))
+   actions.addView(button("İptal"){deleteMode=false;selectedDelete.clear();home()},LinearLayout.LayoutParams(0,-2,1f))
+   root.addView(actions,LinearLayout.LayoutParams(-1,dp(84)))
+  }
 
   scheduleModeTimeout()
  }
