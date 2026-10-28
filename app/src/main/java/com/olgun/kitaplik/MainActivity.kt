@@ -189,90 +189,139 @@ class MainActivity : Activity() {
   init(books[current].name)
   val isLandscape=resources.configuration.orientation==android.content.res.Configuration.ORIENTATION_LANDSCAPE
   if(isLandscape)root.setPadding(0,0,0,0)
-  zoom=zoom.coerceAtMost(if(isLandscape)5f else 3f)
+  zoom=zoom.coerceIn(0.5f,if(isLandscape)5f else 3f)
   val status=text("",12f,true).apply{setPadding(2,0,2,0)}
   if(!isLandscape)root.addView(View(this),LinearLayout.LayoutParams(-1,dp(20)))
   root.addView(status,LinearLayout.LayoutParams(-1,dp(28)))
   val controls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-  val zoomLabel=text("100%",14f,true).apply{setPadding(dp(4),0,dp(4),0)}
+  val zoomLabel=text("",14f,true).apply{setPadding(dp(4),0,dp(4),0)}
   controls.addView(zoomLabel,LinearLayout.LayoutParams(dp(72),dp(36)))
   val bookmarkButton=text("",14f,true).apply{setPadding(2,0,2,0)}
   controls.addView(bookmarkButton,LinearLayout.LayoutParams(0,dp(36),1f))
   root.addView(controls,LinearLayout.LayoutParams(-1,dp(36)))
-  fun refreshBookmark(){bookmarkButton.text=if(books[current].bookmark==page)"Sayfa Ayıracını Kaldır" else "Sayfa Ayıracı Ekle"}
-  fun toggleBookmark(){books[current].bookmark=if(books[current].bookmark==page)-1 else page;save();refreshBookmark();status.text="${page+1} / ${r.pageCount}    ${if(books[current].bookmark==page)"🔖" else ""}";Toast.makeText(this,if(books[current].bookmark==page)"Sayfa imi eklendi" else "Sayfa imi kaldırıldı",Toast.LENGTH_SHORT).show()}
+  fun refreshBookmark(){
+   bookmarkButton.text=if(books[current].bookmark==page)"Sayfa Ayıracını Kaldır" else "Sayfa Ayıracı Ekle"
+   status.text="${page+1} / ${r.pageCount}    ${if(books[current].bookmark==page)"🔖" else ""}"
+  }
+  fun toggleBookmark(){
+   books[current].bookmark=if(books[current].bookmark==page)-1 else page
+   save();refreshBookmark()
+   Toast.makeText(this,if(books[current].bookmark==page)"Sayfa imi eklendi" else "Sayfa imi kaldırıldı",Toast.LENGTH_SHORT).show()
+  }
   bookmarkButton.setOnClickListener{toggleBookmark()}
-  val image=ImageView(this).apply{scaleType=ImageView.ScaleType.MATRIX;setBackgroundColor(Color.WHITE)}
-  root.addView(image,LinearLayout.LayoutParams(-1,0,1f))
-  fun updateMatrix(){
-   val drawable=image.drawable?:return
-   val vw=image.width.toFloat();val vh=image.height.toFloat()
-   if(vw<=0||vh<=0)return
-   val dw=drawable.intrinsicWidth.toFloat();val dh=drawable.intrinsicHeight.toFloat()
-   val fit=minOf(vw/dw,vh/dh)
-   val factor=fit*zoom
-   image.imageMatrix=Matrix().apply{setScale(factor,factor);postTranslate((vw-dw*factor)/2f,(vh-dh*factor)/2f)}
-   zoomLabel.text="${(zoom*100).toInt()}%"
+  val horizontal=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;fillViewport=true}
+  val scroll=ScrollView(this).apply{isVerticalScrollBarEnabled=false;fillViewport=true}
+  val column=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE)}
+  horizontal.addView(scroll,android.widget.FrameLayout.LayoutParams(-1,-1))
+  scroll.addView(column)
+  root.addView(horizontal,LinearLayout.LayoutParams(-1,0,1f))
+  val images=ArrayList<ImageView>()
+  val pageHeights=ArrayList<Int>()
+  val pageWidths=ArrayList<Int>()
+  val screenWidth=resources.displayMetrics.widthPixels
+  for(i in 0 until r.pageCount){
+   val p=r.openPage(i)
+   val pw=p.width;val ph=p.height;p.close()
+   val w=screenWidth.coerceAtLeast(1)
+   val h=(w.toFloat()*ph/pw).toInt().coerceAtLeast(1)
+   pageWidths.add(w);pageHeights.add(h)
+   val img=ImageView(this).apply{scaleType=ImageView.ScaleType.FIT_XY;setBackgroundColor(Color.WHITE)}
+   images.add(img)
+   column.addView(img,LinearLayout.LayoutParams(w,h).apply{bottomMargin=dp(3)})
   }
-  image.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->updateMatrix()}
-  fun render(){
-   val p=r.openPage(page)
+  var rendering=false
+  fun updateVisible(){
+   if(rendering||scroll.height<=0)return
+   rendering=true
    try{
-    val ratio=resources.displayMetrics.widthPixels.toFloat()/p.width
-    val w=(p.width*ratio).toInt().coerceIn(250,1800)
-    val h=(p.height*ratio).toInt().coerceIn(250,2600)
-    val bitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888)
-    bitmap.eraseColor(Color.WHITE)
-    p.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-    image.setImageBitmap(bitmap)
-    updateMatrix()
-    status.text="${page+1} / ${r.pageCount}    ${if(books[current].bookmark==page)"🔖" else ""}"
-    refreshBookmark()
-   }finally{p.close()}
+    val top=scroll.scrollY
+    val bottom=top+scroll.height
+    var y=0
+    var active=page
+    var bestDistance=Int.MAX_VALUE
+    for(i in images.indices){
+     val h=images[i].layoutParams.height+dp(3)
+     val center=y+h/2
+     val distance=kotlin.math.abs(center-(top+scroll.height/2))
+     if(distance<bestDistance){bestDistance=distance;active=i}
+     val visible=y+h>=top-scroll.height && y<=bottom+scroll.height
+     if(visible && images[i].drawable==null){
+      val p=r.openPage(i)
+      try{
+       val w=(pageWidths[i]*zoom).toInt().coerceIn(200,2400)
+       val bh=(pageHeights[i]*zoom).toInt().coerceIn(200,3400)
+       val bmp=Bitmap.createBitmap(w,bh,Bitmap.Config.RGB_565)
+       bmp.eraseColor(Color.WHITE)
+       p.render(bmp,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+       images[i].setImageBitmap(bmp)
+      }finally{p.close()}
+     }else if(!visible && images[i].drawable!=null){
+      val old=images[i].drawable
+      images[i].setImageDrawable(null)
+      if(old is android.graphics.drawable.BitmapDrawable)old.bitmap.recycle()
+     }
+     y+=h
+    }
+    if(page!=active){page=active;refreshBookmark()}
+   }finally{rendering=false}
   }
+  fun applyZoom(){
+   val oldCenter=scroll.scrollY+scroll.height/2
+   val oldWidth=(pageWidths.firstOrNull()?:screenWidth).coerceAtLeast(1)
+   val oldScaled=(oldWidth*zoom).toInt().coerceAtLeast(1)
+   zoomLabel.text="${(zoom*100).toInt()}%"
+   for(i in images.indices){
+    val lp=images[i].layoutParams as LinearLayout.LayoutParams
+    lp.width=(pageWidths[i]*zoom).toInt().coerceAtLeast(1)
+    lp.height=(pageHeights[i]*zoom).toInt().coerceAtLeast(1)
+    images[i].layoutParams=lp
+    val old=images[i].drawable
+    images[i].setImageDrawable(null)
+    if(old is android.graphics.drawable.BitmapDrawable)old.bitmap.recycle()
+   }
+   column.requestLayout()
+   scroll.post{updateVisible()}
+  }
+  scroll.setOnScrollChangeListener{_,_,_,_,_->updateVisible()}
   val scale=android.view.ScaleGestureDetector(this,object:android.view.ScaleGestureDetector.SimpleOnScaleGestureListener(){
    override fun onScale(detector:android.view.ScaleGestureDetector):Boolean{
-    zoom=(zoom*detector.scaleFactor).coerceIn(0.5f,if(isLandscape)5f else 3f)
-    updateMatrix()
+    val next=(zoom*detector.scaleFactor).coerceIn(0.5f,if(isLandscape)5f else 3f)
+    if(kotlin.math.abs(next-zoom)>0.01f){zoom=next;applyZoom()}
     return true
    }
-   override fun onScaleEnd(detector:android.view.ScaleGestureDetector){updateMatrix()}
   })
-  var downY=0f
-  var downX=0f
-  var startBrightness=brightness
-  var multiTouch=false
-  var taps=0
-  var lastTap=0L
-  image.setOnTouchListener{_,event->
+  var downX=0f;var downY=0f;var lastY=0f;var startBrightness=brightness
+  var taps=0;var lastTap=0L;var multiTouch=false
+  scroll.setOnTouchListener{_,event->
    scale.onTouchEvent(event)
    when(event.actionMasked){
-    MotionEvent.ACTION_DOWN->{downY=event.y;downX=event.x;startBrightness=brightness;multiTouch=false;true}
-    MotionEvent.ACTION_POINTER_DOWN->{multiTouch=true;true}
+    MotionEvent.ACTION_DOWN->{downX=event.x;downY=event.y;lastY=event.y;startBrightness=brightness;multiTouch=false}
+    MotionEvent.ACTION_POINTER_DOWN->{multiTouch=true}
     MotionEvent.ACTION_MOVE->{
      if(!multiTouch&&downX<dp(65)&&kotlin.math.abs(event.y-downY)>dp(8)){
       brightness=(startBrightness+(downY-event.y)/dp(200).toFloat()).coerceIn(0.05f,1f)
       window.attributes=window.attributes.apply{screenBrightness=brightness}
-     };true
+      return@setOnTouchListener true
+     }
     }
     MotionEvent.ACTION_UP->{
-     if(!multiTouch){
-      val delta=event.y-downY
-      if(downX>=dp(65)&&kotlin.math.abs(delta)>dp(65)){
-       val next=(page+if(delta<0)1 else -1).coerceIn(0,r.pageCount-1)
-       if(next!=page){page=next;render()}
-      }else if(kotlin.math.abs(delta)<dp(20)&&kotlin.math.abs(event.x-downX)<dp(20)){
-       val now=android.os.SystemClock.uptimeMillis()
-       taps=if(now-lastTap<450)taps+1 else 1
-       lastTap=now
-       if(taps>=3){toggleBookmark();taps=0}
-      }
-     };true
+     if(!multiTouch&&kotlin.math.abs(event.y-downY)<dp(20)&&kotlin.math.abs(event.x-downX)<dp(20)){
+      val now=android.os.SystemClock.uptimeMillis()
+      taps=if(now-lastTap<450)taps+1 else 1;lastTap=now
+      if(taps>=3){toggleBookmark();taps=0}
+     }
     }
-    else->true
    }
+   multiTouch||scale.isInProgress
   }
-  render()
+  refreshBookmark()
+  zoomLabel.text="${(zoom*100).toInt()}%"
+  scroll.post{
+   var target=0
+   for(i in 0 until page.coerceIn(0,r.pageCount-1))target+=pageHeights[i]+dp(3)
+   scroll.scrollTo(0,(target*zoom).toInt())
+   updateVisible()
+  }
  }
  override fun onConfigurationChanged(newConfig:android.content.res.Configuration){
   super.onConfigurationChanged(newConfig)
