@@ -209,8 +209,8 @@ class MainActivity : Activity() {
    Toast.makeText(this,if(books[current].bookmark==page)"Sayfa imi eklendi" else "Sayfa imi kaldırıldı",Toast.LENGTH_SHORT).show()
   }
   bookmarkButton.setOnClickListener{toggleBookmark()}
-  val horizontal=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;fillViewport=true}
-  val scroll=ScrollView(this).apply{isVerticalScrollBarEnabled=false;fillViewport=true}
+  val horizontal=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isFillViewport=true}
+  val scroll=ScrollView(this).apply{isVerticalScrollBarEnabled=false;isFillViewport=true}
   val column=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE)}
   horizontal.addView(scroll,android.widget.FrameLayout.LayoutParams(-1,-1))
   scroll.addView(column)
