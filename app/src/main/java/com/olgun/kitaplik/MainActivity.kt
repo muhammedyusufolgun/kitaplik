@@ -37,7 +37,7 @@ class MainActivity : Activity() {
  private fun save(){val a=JSONArray(); books.forEach { a.put(JSONObject().put("name",it.name).put("path",it.path).put("cover",it.cover).put("bookmark",it.bookmark)) };prefs.edit().putString("items",a.toString()).apply()}
  private fun text(s:String,size:Float=16f,bold:Boolean=false):TextView=TextView(this).apply{ text=s;textSize=size;setTextColor(Color.rgb(50,50,50));gravity=Gravity.CENTER;setPadding(8,10,8,10);if(bold)setTypeface(null,1)}
  private fun button(s:String,action:()->Unit)=Button(this).apply{text=s;setAllCaps(false);setOnClickListener{action()}}
- private fun init(title:String){root=LinearLayout(this).apply{orientation=1;setBackgroundColor(Color.WHITE);setPadding(8,4,8,4)};setContentView(root);val head=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL};head.addView(text(title,24f,true),LinearLayout.LayoutParams(0,-2,1f));root.addView(head)}
+ private fun init(title:String){root=LinearLayout(this).apply{orientation=1;setBackgroundColor(Color.WHITE);setPadding(8,dp(18),8,4)};setContentView(root);root.addView(text(title,24f,true),LinearLayout.LayoutParams(-1,dp(56)))}
  private fun footer(){root.addView(text("Muhammed Yusuf OLGUN",13f,true),LinearLayout.LayoutParams(-1,-2))}
  private fun dp(n:Int):Int=(resources.displayMetrics.density*n).toInt()
  private fun menu(){
@@ -55,15 +55,16 @@ class MainActivity : Activity() {
   intArrayOf(Color.rgb(247,222,181),color,Color.rgb(102,59,32))).apply{cornerRadius=dp(5).toFloat()}
  private fun home(){
   current=-1;closePdf();init("Kitaplık")
-  val bar=root.getChildAt(0) as LinearLayout
   val menuButton=button("☰ Menü"){menu()}
   menuButton.textSize=14f
-  bar.addView(menuButton,LinearLayout.LayoutParams(dp(108),dp(54)))
+  val menuRow=LinearLayout(this).apply{gravity=Gravity.END or Gravity.CENTER_VERTICAL;setPadding(dp(8),0,dp(8),dp(8))}
+  menuRow.addView(menuButton,LinearLayout.LayoutParams(dp(128),dp(52)))
+  root.addView(menuRow,LinearLayout.LayoutParams(-1,dp(64)))
   val sc=ScrollView(this).apply{clipToPadding=false;setPadding(dp(5),dp(10),dp(5),dp(12))}
   root.addView(sc,LinearLayout.LayoutParams(-1,0,1f))
   val stack=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE)}
   sc.addView(stack)
-  val rows=maxOf(5,(books.size+4)/5)
+  val rows=maxOf(4,(books.size+4)/5)
   for(r in 0 until rows){
    val shelf=LinearLayout(this).apply{
     orientation=LinearLayout.VERTICAL
