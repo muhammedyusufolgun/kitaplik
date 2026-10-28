@@ -22,6 +22,8 @@ class MainActivity : Activity() {
  private lateinit var root:LinearLayout
  private val prefs by lazy { getSharedPreferences("books",MODE_PRIVATE) }
  private var sorting=false
+ private var editMode=false
+ private val selectedDelete=mutableSetOf<Int>()
  private val pickPdf=100
  private val pickCover=101
  private var coverIndex=-1
@@ -45,9 +47,9 @@ class MainActivity : Activity() {
   AlertDialog.Builder(this).setTitle("Kitaplık Menüsü").setItems(options){_,which->
    when(which){
     0->pickPdf()
-    1->{sorting=!sorting;selectedMove=-1;home()}
-    2->chooseBook("Kapak düzenle"){coverDialog(it)}
-    3->deleteDialog()
+    1->{sorting=!sorting;editMode=false;selectedMove=-1;home()}
+    2->{editMode=true;sorting=false;home();Toast.makeText(this,"Kapak değiştirmek için raftaki kitaba dokunun",Toast.LENGTH_LONG).show()}
+    3->{editMode=false;sorting=false;deleteMode=true;selectedDelete.clear();home()}
    }
   }.setNegativeButton("Kapat",null).show()
  }
@@ -86,13 +88,14 @@ class MainActivity : Activity() {
       coverBitmap(books[i])?.let{setImageBitmap(it)}?:setImageResource(android.R.drawable.ic_menu_report_image)
      }
      slot.addView(cover,LinearLayout.LayoutParams(-1,dp(90)))
-     slot.addView(text("OKU",11f,true).apply{setPadding(0,dp(2),0,0)})
+
      slot.setOnClickListener{
-      if(sorting){
+      if(editMode){coverDialog(i)}else if(deleteMode){if(!selectedDelete.add(i))selectedDelete.remove(i);slot.alpha=if(i in selectedDelete)0.45f else 1f}else if(sorting){
        if(selectedMove<0){selectedMove=i;Toast.makeText(this,"Şimdi hedef kitaba dokunun",Toast.LENGTH_SHORT).show()}
        else{val moved=books.removeAt(selectedMove);books.add(i.coerceAtMost(books.size),moved);selectedMove=-1;save();home()}
       }else openBook(i)
      }
+     if(deleteMode&&i in selectedDelete)slot.alpha=0.45f
      if(sorting)slot.setOnLongClickListener{
       val clip=ClipData.newPlainText("book",i.toString())
       slot.startDragAndDrop(clip,View.DragShadowBuilder(slot),null,0);true
@@ -121,10 +124,13 @@ class MainActivity : Activity() {
    val lp=LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(18)}
    stack.addView(shelf,lp)
   }
-  if(sorting)root.addView(text("Sıralama açık: Kitaba uzun basıp sürükleyin.",12f))
-  footer()
+  if(sorting)root.addView(text("Sıralama: Kitaba uzun basıp hedef konuma sürükleyin.",12f))
+  if(editMode)root.addView(button("Kapak düzenlemeyi bitir"){editMode=false;home()})
+  if(deleteMode){val actions=LinearLayout(this);actions.addView(button("Seçilenleri Sil"){if(selectedDelete.isNotEmpty())AlertDialog.Builder(this).setTitle("Sil").setMessage("Seçilen kitaplar silinsin mi?").setPositiveButton("Devam"){_,_->AlertDialog.Builder(this).setTitle("Emin misin?").setPositiveButton("Evet, sil"){_,_->selectedDelete.sortedDescending().forEach{books.removeAt(it)};selectedDelete.clear();deleteMode=false;save();home()}.setNegativeButton("Vazgeç",null).show()}.setNegativeButton("İptal",null).show()},LinearLayout.LayoutParams(0,-2,1f));actions.addView(button("İptal"){deleteMode=false;selectedDelete.clear();home()},LinearLayout.LayoutParams(0,-2,1f));root.addView(actions)}
+  root.addView(text("Muhammed Yusuf OLGUN",13f,true).apply{setPadding(8,0,8,dp(28))},LinearLayout.LayoutParams(-1,-2))
  }
  private var selectedMove=-1
+ private var deleteMode=false
  private fun coverBitmap(b:Book):Bitmap?{return try{if(b.cover.isNotEmpty()&&File(b.cover).exists())BitmapFactory.decodeFile(b.cover)?.let{Bitmap.createScaledBitmap(it,160,220,true)}else{val fd=android.os.ParcelFileDescriptor.open(File(b.path),android.os.ParcelFileDescriptor.MODE_READ_ONLY);val r=PdfRenderer(fd);val p=r.openPage(0);val bmp=Bitmap.createBitmap(160,220,Bitmap.Config.ARGB_8888);bmp.eraseColor(Color.WHITE);p.render(bmp,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);p.close();r.close();fd.close();bmp}}catch(e:Exception){null}}
  private fun pickPdf(){val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply{type="application/pdf";addCategory(Intent.CATEGORY_OPENABLE);putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true)};startActivityForResult(intent,pickPdf)}
  private fun chooseBook(title:String,action:(Int)->Unit){if(books.isEmpty()){Toast.makeText(this,"Önce PDF ekleyin",Toast.LENGTH_SHORT).show();return};AlertDialog.Builder(this).setTitle(title).setItems(books.map{it.name}.toTypedArray()){_,i->action(i)}.show()}
@@ -141,24 +147,73 @@ class MainActivity : Activity() {
  }else if(requestCode==pickCover&&coverIndex in books.indices){try{val f=File(filesDir,"cover_${System.nanoTime()}.png");contentResolver.openInputStream(data.data!!)!!.use{input->f.outputStream().use{input.copyTo(it)}};books[coverIndex].cover=f.path;save();home()}catch(e:Exception){Toast.makeText(this,"Kapak açılamadı",Toast.LENGTH_SHORT).show()}}}
  private fun closePdf(){try{renderer?.close();descriptor?.close()}catch(_:Exception){};renderer=null;descriptor=null}
  private fun openBook(i:Int){try{closePdf();descriptor=android.os.ParcelFileDescriptor.open(File(books[i].path),android.os.ParcelFileDescriptor.MODE_READ_ONLY);renderer=PdfRenderer(descriptor!!);current=i;page=books[i].bookmark.takeIf{it>=0}?:0;page=page.coerceIn(0,renderer!!.pageCount-1);reader()}catch(e:Exception){Toast.makeText(this,"PDF açılamadı: ${e.message}",Toast.LENGTH_LONG).show();home()}}
- private fun reader(){val r=renderer?:return;init(books[current].name);val bar=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL};bar.addView(text(books[current].name,18f,true),LinearLayout.LayoutParams(0,dp(56),1f));bar.addView(button("Geri"){home()});root.addView(bar)
- val status=text("",14f,true);root.addView(status)
- val sc=ScrollView(this).apply{isFillViewport=false};root.addView(sc,LinearLayout.LayoutParams(-1,0,1f));val image=ImageView(this).apply{adjustViewBounds=true;scaleType=ImageView.ScaleType.FIT_CENTER};sc.addView(image)
- fun render(){val p=r.openPage(page);val w=(p.width*zoom).toInt().coerceIn(200,2500);val h=(p.height*zoom).toInt().coerceIn(200,3500);val bmp=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);bmp.eraseColor(Color.WHITE);p.render(bmp,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);p.close();image.setImageBitmap(bmp);status.text="${page+1} / ${r.pageCount} sayfa";sc.scrollTo(0,0)}
- val controls=LinearLayout(this).apply{gravity=Gravity.CENTER;orientation=LinearLayout.VERTICAL};root.addView(controls)
- val nav=LinearLayout(this);controls.addView(nav)
- fun addNav(s:String,f:()->Unit){nav.addView(button(s,f),LinearLayout.LayoutParams(0,-2,1f))}
- addNav("◀"){if(page>0){page--;render()}}
- addNav("▶"){if(page<r.pageCount-1){page++;render()}}
- addNav("−"){zoom=(zoom/1.25f).coerceAtLeast(.5f);render()}
- addNav("+"){zoom=(zoom*1.25f).coerceAtMost(3f);render()}
- val extras=LinearLayout(this);controls.addView(extras)
- fun addExtra(s:String,f:()->Unit){extras.addView(button(s,f),LinearLayout.LayoutParams(0,-2,1f))}
- addExtra("🔖"){books[current].bookmark=if(books[current].bookmark==page)-1 else page;save();Toast.makeText(this,if(books[current].bookmark>=0)"Ayraç aktif" else "Ayraç pasif",Toast.LENGTH_SHORT).show()}
- addExtra("☀−"){brightness=(brightness-.1f).coerceAtLeast(.15f);window.attributes=window.attributes.apply{screenBrightness=brightness}}
- addExtra("☀+"){brightness=(brightness+.1f).coerceAtMost(1f);window.attributes=window.attributes.apply{screenBrightness=brightness}}
- addExtra("↻"){landscape=!landscape;requestedOrientation=if(landscape)android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT}
- footer();render()}
+ private fun reader(){
+  val r=renderer?:return
+  init(books[current].name)
+  val status=text("",12f,true).apply{setPadding(2,0,2,0)}
+  root.addView(status,LinearLayout.LayoutParams(-1,dp(28)))
+  val image=ImageView(this).apply{scaleType=ImageView.ScaleType.FIT_CENTER;setBackgroundColor(Color.WHITE)}
+  root.addView(image,LinearLayout.LayoutParams(-1,0,1f))
+  fun render(){
+   val p=r.openPage(page)
+   try{
+    val ratio=resources.displayMetrics.widthPixels.toFloat()/p.width
+    val w=(p.width*ratio*zoom).toInt().coerceIn(250,2600)
+    val h=(p.height*ratio*zoom).toInt().coerceIn(250,3600)
+    val bitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888)
+    bitmap.eraseColor(Color.WHITE)
+    p.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+    image.setImageBitmap(bitmap)
+    status.text="${page+1} / ${r.pageCount}    ${if(books[current].bookmark==page)"🔖" else ""}"
+   }finally{p.close()}
+  }
+  val scale=android.view.ScaleGestureDetector(this,object:android.view.ScaleGestureDetector.SimpleOnScaleGestureListener(){
+   override fun onScale(detector:android.view.ScaleGestureDetector):Boolean{
+    zoom=(zoom*detector.scaleFactor).coerceIn(0.5f,3.5f)
+    return true
+   }
+   override fun onScaleEnd(detector:android.view.ScaleGestureDetector){render()}
+  })
+  var downY=0f
+  var downX=0f
+  var startBrightness=brightness
+  var multiTouch=false
+  var taps=0
+  var lastTap=0L
+  image.setOnTouchListener{_,event->
+   scale.onTouchEvent(event)
+   when(event.actionMasked){
+    MotionEvent.ACTION_DOWN->{downY=event.y;downX=event.x;startBrightness=brightness;multiTouch=false;true}
+    MotionEvent.ACTION_POINTER_DOWN->{multiTouch=true;true}
+    MotionEvent.ACTION_MOVE->{
+     if(!multiTouch&&downX<dp(65)&&kotlin.math.abs(event.y-downY)>dp(8)){
+      brightness=(startBrightness+(downY-event.y)/dp(200).toFloat()).coerceIn(0.05f,1f)
+      window.attributes=window.attributes.apply{screenBrightness=brightness}
+     };true
+    }
+    MotionEvent.ACTION_UP->{
+     if(!multiTouch){
+      val delta=event.y-downY
+      if(downX>=dp(65)&&kotlin.math.abs(delta)>dp(65)){
+       val next=(page+if(delta<0)1 else -1).coerceIn(0,r.pageCount-1)
+       if(next!=page){page=next;render()}
+      }else if(kotlin.math.abs(delta)<dp(20)&&kotlin.math.abs(event.x-downX)<dp(20)){
+       val now=android.os.SystemClock.uptimeMillis()
+       taps=if(now-lastTap<450)taps+1 else 1
+       lastTap=now
+       if(taps>=3){books[current].bookmark=if(books[current].bookmark==page)-1 else page;save();render();taps=0;Toast.makeText(this,if(books[current].bookmark==page)"Sayfa imi eklendi" else "Sayfa imi kaldırıldı",Toast.LENGTH_SHORT).show()}
+      }
+     };true
+    }
+    else->true
+   }
+  }
+  render()
+ }
+ override fun onConfigurationChanged(newConfig:android.content.res.Configuration){
+  super.onConfigurationChanged(newConfig)
+  if(current>=0)reader() else home()
+ }
  override fun onBackPressed(){if(current>=0){requestedOrientation=android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;home()}else super.onBackPressed()}
  override fun onDestroy(){closePdf();super.onDestroy()}
 }
