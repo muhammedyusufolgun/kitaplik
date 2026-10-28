@@ -187,8 +187,11 @@ class MainActivity : Activity() {
  private fun reader(){
   val r=renderer?:return
   init(books[current].name)
+  val isLandscape=resources.configuration.orientation==android.content.res.Configuration.ORIENTATION_LANDSCAPE
+  if(isLandscape)root.setPadding(0,0,0,0)
+  zoom=zoom.coerceAtMost(if(isLandscape)5f else 3f)
   val status=text("",12f,true).apply{setPadding(2,0,2,0)}
-  root.addView(View(this),LinearLayout.LayoutParams(-1,dp(20)))
+  if(!isLandscape)root.addView(View(this),LinearLayout.LayoutParams(-1,dp(20)))
   root.addView(status,LinearLayout.LayoutParams(-1,dp(28)))
   val controls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
   val zoomLabel=text("100%",14f,true).apply{setPadding(dp(4),0,dp(4),0)}
@@ -229,7 +232,7 @@ class MainActivity : Activity() {
   }
   val scale=android.view.ScaleGestureDetector(this,object:android.view.ScaleGestureDetector.SimpleOnScaleGestureListener(){
    override fun onScale(detector:android.view.ScaleGestureDetector):Boolean{
-    zoom=(zoom*detector.scaleFactor).coerceIn(0.5f,3f)
+    zoom=(zoom*detector.scaleFactor).coerceIn(0.5f,if(isLandscape)5f else 3f)
     updateMatrix()
     return true
    }
