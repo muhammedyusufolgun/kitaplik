@@ -67,8 +67,8 @@ class MainActivity : Activity() {
   val menuButton=button("☰ Menü"){menu()}
   menuButton.textSize=14f
   header.addView(menuButton,LinearLayout.LayoutParams(dp(128),dp(52)))
-  root.addView(header,LinearLayout.LayoutParams(-1,dp(68)))
-  val sc=ScrollView(this).apply{clipToPadding=false;setPadding(dp(5),dp(10),dp(5),0)}
+  root.addView(header,LinearLayout.LayoutParams(-1,dp(56)))
+  val sc=ScrollView(this).apply{clipToPadding=false;setPadding(dp(5),dp(1),dp(5),0)}
   root.addView(sc,LinearLayout.LayoutParams(-1,0,1f))
   val stack=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE);setOnClickListener{exitEditMode()}}
   sc.addView(stack)
@@ -133,7 +133,7 @@ class MainActivity : Activity() {
    val lp=LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=if(r==rows-1)dp(1) else dp(18)}
    stack.addView(shelf,lp)
   }
-  stack.addView(text("Muhammed Yusuf OLGUN",13f,true).apply{setPadding(dp(8),0,dp(8),0);gravity=Gravity.CENTER},LinearLayout.LayoutParams(-1,dp(26)))
+  stack.addView(text("Muhammed Yusuf OLGUN",13f,true).apply{setTextColor(Color.rgb(64,64,64));setPadding(dp(8),0,dp(8),0);gravity=Gravity.CENTER},LinearLayout.LayoutParams(-1,dp(26)))
   if(sorting)root.addView(text("Sıralama: Kitaba uzun basıp hedef konuma sürükleyin.",12f))
   if(editMode)root.addView(button("Kapak düzenlemeyi bitir"){editMode=false;home()})
   if(deleteMode){val actions=LinearLayout(this).apply{setPadding(dp(8),0,dp(8),dp(12))};actions.addView(button("Seçilenleri Sil"){if(selectedDelete.isNotEmpty())AlertDialog.Builder(this).setTitle("Sil").setMessage("Seçilen kitaplar silinsin mi?").setPositiveButton("Devam"){_,_->AlertDialog.Builder(this).setTitle("Emin misin?").setPositiveButton("Evet, sil"){_,_->selectedDelete.sortedDescending().forEach{books.removeAt(it)};selectedDelete.clear();deleteMode=false;save();home()}.setNegativeButton("Vazgeç",null).show()}.setNegativeButton("İptal",null).show()},LinearLayout.LayoutParams(0,-2,1f));actions.addView(button("İptal"){deleteMode=false;selectedDelete.clear();home()},LinearLayout.LayoutParams(0,-2,1f));root.addView(actions,LinearLayout.LayoutParams(-1,dp(84)))}
