@@ -48,13 +48,12 @@ class MainActivity : Activity() {
  private fun footer(){root.addView(text("Muhammed Yusuf OLGUN",13f,true),LinearLayout.LayoutParams(-1,-2))}
  private fun dp(n:Int):Int=(resources.displayMetrics.density*n).toInt()
  private fun menu(){
-  val options=arrayOf("Dosya ekle","Dosya sırala","Dosya Kapak Düzenle","Dosya sil")
+  val options=arrayOf("Dosya ekle","Dosya sırala","Dosya sil")
   AlertDialog.Builder(this).setTitle("Kitaplık Menüsü").setItems(options){_,which->
    when(which){
     0->pickPdf()
     1->{sorting=!sorting;editMode=false;selectedMove=-1;home()}
-    2->{editMode=true;sorting=false;home();Toast.makeText(this,"Kapak değiştirmek için raftaki kitaba dokunun",Toast.LENGTH_LONG).show()}
-    3->{editMode=false;sorting=false;deleteMode=true;selectedDelete.clear();home()}
+    2->{editMode=false;sorting=false;deleteMode=true;selectedDelete.clear();home()}
    }
   }.setNegativeButton("Kapat",null).show()
  }
@@ -68,7 +67,7 @@ class MainActivity : Activity() {
   menuButton.textSize=14f
   header.addView(menuButton,LinearLayout.LayoutParams(dp(128),dp(52)))
   root.addView(header,LinearLayout.LayoutParams(-1,dp(68)))
-  val sc=ScrollView(this).apply{clipToPadding=false;setPadding(dp(5),dp(10),dp(5),dp(12))}
+  val sc=ScrollView(this).apply{clipToPadding=false;setPadding(dp(5),dp(10),dp(5),0)}
   root.addView(sc,LinearLayout.LayoutParams(-1,0,1f))
   val stack=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE);setOnClickListener{exitEditMode()}}
   sc.addView(stack)
@@ -129,13 +128,13 @@ class MainActivity : Activity() {
     intArrayOf(Color.rgb(103,57,28),Color.rgb(76,40,23)))}
    edge.setOnClickListener{exitEditMode()}
    shelf.addView(edge,LinearLayout.LayoutParams(-1,dp(7)))
-   val lp=LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=dp(18)}
+   val lp=LinearLayout.LayoutParams(-1,-2).apply{bottomMargin=if(r==rows-1)dp(1) else dp(18)}
    stack.addView(shelf,lp)
   }
   if(sorting)root.addView(text("Sıralama: Kitaba uzun basıp hedef konuma sürükleyin.",12f))
   if(editMode)root.addView(button("Kapak düzenlemeyi bitir"){editMode=false;home()})
   if(deleteMode){val actions=LinearLayout(this);actions.addView(button("Seçilenleri Sil"){if(selectedDelete.isNotEmpty())AlertDialog.Builder(this).setTitle("Sil").setMessage("Seçilen kitaplar silinsin mi?").setPositiveButton("Devam"){_,_->AlertDialog.Builder(this).setTitle("Emin misin?").setPositiveButton("Evet, sil"){_,_->selectedDelete.sortedDescending().forEach{books.removeAt(it)};selectedDelete.clear();deleteMode=false;save();home()}.setNegativeButton("Vazgeç",null).show()}.setNegativeButton("İptal",null).show()},LinearLayout.LayoutParams(0,-2,1f));actions.addView(button("İptal"){deleteMode=false;selectedDelete.clear();home()},LinearLayout.LayoutParams(0,-2,1f));root.addView(actions)}
-  root.addView(text("Muhammed Yusuf OLGUN",13f,true).apply{setPadding(8,0,8,dp(12))},LinearLayout.LayoutParams(-1,-2))
+  root.addView(text("Muhammed Yusuf OLGUN",13f,true).apply{setPadding(8,0,8,0)},LinearLayout.LayoutParams(-1,-2))
   scheduleModeTimeout()
  }
  private fun moveBook(source:Int,target:Int){
@@ -170,6 +169,10 @@ class MainActivity : Activity() {
   val status=text("",12f,true).apply{setPadding(2,0,2,0)}
   root.addView(View(this),LinearLayout.LayoutParams(-1,dp(20)))
   root.addView(status,LinearLayout.LayoutParams(-1,dp(28)))
+  val bookmarkButton=text("",14f,true).apply{setPadding(2,0,2,0)}
+  root.addView(bookmarkButton,LinearLayout.LayoutParams(-1,dp(36)))
+  fun refreshBookmark(){bookmarkButton.text=if(books[current].bookmark==page)"Sayfa Ayıracını Kaldır" else "Sayfa Ayıracı Ekle"}
+  bookmarkButton.setOnClickListener{books[current].bookmark=if(books[current].bookmark==page)-1 else page;save();refreshBookmark()}
   val image=ImageView(this).apply{scaleType=ImageView.ScaleType.MATRIX;setBackgroundColor(Color.WHITE)}
   root.addView(image,LinearLayout.LayoutParams(-1,0,1f))
   var baseWidth=1f
@@ -196,6 +199,7 @@ class MainActivity : Activity() {
     image.setImageBitmap(bitmap)
     updateMatrix()
     status.text="${page+1} / ${r.pageCount}    ${if(books[current].bookmark==page)"🔖" else ""}"
+    refreshBookmark()
    }finally{p.close()}
   }
   val scale=android.view.ScaleGestureDetector(this,object:android.view.ScaleGestureDetector.SimpleOnScaleGestureListener(){
