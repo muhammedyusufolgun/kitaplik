@@ -86,7 +86,7 @@ class MainActivity : Activity() {
    for(col in 0..3){
     val i=r*4+col
     val slot=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL;setPadding(dp(2),dp(2),dp(2),dp(3))}
-    if(i<books.size){
+    if(i<books.size && books[i].path.isNotEmpty()){
      val cover=ImageView(this).apply{
       scaleType=ImageView.ScaleType.FIT_CENTER
       setBackgroundColor(Color.rgb(255,253,249))
@@ -98,7 +98,7 @@ class MainActivity : Activity() {
      slot.setOnClickListener{
       if(editMode){cancelModeTimeout();editMode=false;coverDialog(i)}else if(deleteMode){if(!selectedDelete.add(i))selectedDelete.remove(i);slot.alpha=if(i in selectedDelete)0.45f else 1f}else if(sorting){
        if(selectedMove<0){selectedMove=i;scheduleModeTimeout();Toast.makeText(this,"Şimdi hedef kitaba dokunun",Toast.LENGTH_SHORT).show()}
-       else{val moved=books.removeAt(selectedMove);books.add(i.coerceAtMost(books.size),moved);selectedMove=-1;save();home()}
+       else{moveBook(selectedMove,i);selectedMove=-1;home()}
       }else openBook(i)
      }
      if(deleteMode&&i in selectedDelete)slot.alpha=0.45f
@@ -109,14 +109,14 @@ class MainActivity : Activity() {
      if(sorting)slot.setOnDragListener{_,event->
       if(event.action==DragEvent.ACTION_DROP){
        val source=event.clipData.getItemAt(0).text.toString().toIntOrNull()
-       if(source!=null&&source in books.indices){val moved=books.removeAt(source);val target=if(source<i)i-1 else i;books.add(target.coerceIn(0,books.size),moved);save();home()}
+       if(source!=null&&source in books.indices && books[source].path.isNotEmpty()){moveBook(source,i);home()}
        true
       }else true
      }
     }else{
      slot.addView(View(this).apply{setOnClickListener{exitEditMode()}},LinearLayout.LayoutParams(-1,dp(111)))
      if(sorting)slot.setOnDragListener{_,event->
-      if(event.action==DragEvent.ACTION_DROP){val source=event.clipData.getItemAt(0).text.toString().toIntOrNull();if(source!=null&&source in books.indices){val moved=books.removeAt(source);books.add(i.coerceAtMost(books.size),moved);save();home()};true}else true
+      if(event.action==DragEvent.ACTION_DROP){val source=event.clipData.getItemAt(0).text.toString().toIntOrNull();if(source!=null&&source in books.indices && books[source].path.isNotEmpty()){moveBook(source,i);home()};true}else true
      }
     }
     row.addView(slot,LinearLayout.LayoutParams(0,dp(125),1f))
@@ -138,11 +138,19 @@ class MainActivity : Activity() {
   root.addView(text("Muhammed Yusuf OLGUN",13f,true).apply{setPadding(8,0,8,dp(12))},LinearLayout.LayoutParams(-1,-2))
   scheduleModeTimeout()
  }
+ private fun moveBook(source:Int,target:Int){
+  if(source !in books.indices || books[source].path.isEmpty() || target<0)return
+  val moved=books[source]
+  if(target>=books.size){while(books.size<=target)books.add(Book("",""));books[target]=moved;books[source]=Book("","")}
+  else if(books[target].path.isEmpty()){books[target]=moved;books[source]=Book("","")}
+  else if(source!=target){books.removeAt(source);books.add((if(source<target)target-1 else target).coerceIn(0,books.size),moved)}
+  save()
+ }
  private var selectedMove=-1
  private var deleteMode=false
  private fun coverBitmap(b:Book):Bitmap?{return try{if(b.cover.isNotEmpty()&&File(b.cover).exists())BitmapFactory.decodeFile(b.cover)?.let{Bitmap.createScaledBitmap(it,160,220,true)}else{val fd=android.os.ParcelFileDescriptor.open(File(b.path),android.os.ParcelFileDescriptor.MODE_READ_ONLY);val r=PdfRenderer(fd);val p=r.openPage(0);val bmp=Bitmap.createBitmap(160,220,Bitmap.Config.ARGB_8888);bmp.eraseColor(Color.WHITE);p.render(bmp,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);p.close();r.close();fd.close();bmp}}catch(e:Exception){null}}
  private fun pickPdf(){val intent=Intent(Intent.ACTION_OPEN_DOCUMENT).apply{type="application/pdf";addCategory(Intent.CATEGORY_OPENABLE);putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true)};startActivityForResult(intent,pickPdf)}
- private fun chooseBook(title:String,action:(Int)->Unit){if(books.isEmpty()){Toast.makeText(this,"Önce PDF ekleyin",Toast.LENGTH_SHORT).show();return};AlertDialog.Builder(this).setTitle(title).setItems(books.map{it.name}.toTypedArray()){_,i->action(i)}.show()}
+ private fun chooseBook(title:String,action:(Int)->Unit){if(books.isEmpty()){Toast.makeText(this,"Önce PDF ekleyin",Toast.LENGTH_SHORT).show();return};AlertDialog.Builder(this).setTitle(title).setItems(books.filter{it.path.isNotEmpty()}.map{it.name}.toTypedArray()){_,i->action(i)}.show()}
  private fun coverDialog(i:Int){
   AlertDialog.Builder(this).setTitle(books[i].name).setItems(arrayOf("Kapak seç","İlk PDF sayfasını kullan")){_,choice->
    if(choice==0){coverIndex=i;startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply{type="image/*";addCategory(Intent.CATEGORY_OPENABLE)},pickCover)}
@@ -152,7 +160,7 @@ class MainActivity : Activity() {
  private fun deleteDialog(){val checked=BooleanArray(books.size);AlertDialog.Builder(this).setTitle("Silinecek kitapları seçin").setMultiChoiceItems(books.map{it.name}.toTypedArray(),checked){_,i,v->checked[i]=v}.setPositiveButton("Sil"){_,_->if(checked.any{it})AlertDialog.Builder(this).setTitle("Emin misin?").setMessage("Seçilen kitaplar kitaplıktan silinecek.").setPositiveButton("Evet, sil"){_,_->books.indices.reversed().filter{checked[it]}.forEach{books.removeAt(it)};save();home()}.setNegativeButton("Vazgeç",null).show()}.setNegativeButton("İptal",null).show()}
  override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);if(resultCode!=RESULT_OK||data==null)return
  if(requestCode==pickPdf){val uris=mutableListOf<Uri>();data.clipData?.let{for(i in 0 until it.itemCount)uris.add(it.getItemAt(i).uri)}?:data.data?.let{uris.add(it)}
- uris.forEach{uri->try{var name="Kitap.pdf";contentResolver.query(uri,null,null,null,null)?.use{if(it.moveToFirst()){val n=it.getColumnIndex(OpenableColumns.DISPLAY_NAME);if(n>=0)name=it.getString(n)}};val f=File(filesDir,"book_${System.nanoTime()}.pdf");contentResolver.openInputStream(uri)!!.use{input->f.outputStream().use{input.copyTo(it)}};books.add(Book(name,f.path))}catch(e:Exception){Toast.makeText(this,"Dosya eklenemedi: ${e.message}",Toast.LENGTH_LONG).show()}};save();home()
+ uris.forEach{uri->try{var name="Kitap.pdf";contentResolver.query(uri,null,null,null,null)?.use{if(it.moveToFirst()){val n=it.getColumnIndex(OpenableColumns.DISPLAY_NAME);if(n>=0)name=it.getString(n)}};val f=File(filesDir,"book_${System.nanoTime()}.pdf");contentResolver.openInputStream(uri)!!.use{input->f.outputStream().use{input.copyTo(it)}};val empty=books.indexOfFirst{it.path.isEmpty()};if(empty>=0)books[empty]=Book(name,f.path) else books.add(Book(name,f.path))}catch(e:Exception){Toast.makeText(this,"Dosya eklenemedi: ${e.message}",Toast.LENGTH_LONG).show()}};save();home()
  }else if(requestCode==pickCover&&coverIndex in books.indices){try{val f=File(filesDir,"cover_${System.nanoTime()}.png");contentResolver.openInputStream(data.data!!)!!.use{input->f.outputStream().use{input.copyTo(it)}};books[coverIndex].cover=f.path;save();home()}catch(e:Exception){Toast.makeText(this,"Kapak açılamadı",Toast.LENGTH_SHORT).show()}}}
  private fun closePdf(){try{renderer?.close();descriptor?.close()}catch(_:Exception){};renderer=null;descriptor=null}
  private fun openBook(i:Int){try{closePdf();descriptor=android.os.ParcelFileDescriptor.open(File(books[i].path),android.os.ParcelFileDescriptor.MODE_READ_ONLY);renderer=PdfRenderer(descriptor!!);current=i;page=books[i].bookmark.takeIf{it>=0}?:0;page=page.coerceIn(0,renderer!!.pageCount-1);reader()}catch(e:Exception){Toast.makeText(this,"PDF açılamadı: ${e.message}",Toast.LENGTH_LONG).show();home()}}
@@ -160,28 +168,43 @@ class MainActivity : Activity() {
   val r=renderer?:return
   init(books[current].name)
   val status=text("",12f,true).apply{setPadding(2,0,2,0)}
+  root.addView(View(this),LinearLayout.LayoutParams(-1,dp(20)))
   root.addView(status,LinearLayout.LayoutParams(-1,dp(28)))
-  val image=ImageView(this).apply{scaleType=ImageView.ScaleType.FIT_CENTER;setBackgroundColor(Color.WHITE)}
+  val image=ImageView(this).apply{scaleType=ImageView.ScaleType.MATRIX;setBackgroundColor(Color.WHITE)}
   root.addView(image,LinearLayout.LayoutParams(-1,0,1f))
+  var baseWidth=1f
+  var baseHeight=1f
+  fun updateMatrix(){
+   val drawable=image.drawable?:return
+   val vw=image.width.toFloat();val vh=image.height.toFloat()
+   if(vw<=0||vh<=0)return
+   val dw=drawable.intrinsicWidth.toFloat();val dh=drawable.intrinsicHeight.toFloat()
+   val fit=minOf(vw/dw,vh/dh)
+   val factor=fit*zoom
+   image.imageMatrix=Matrix().apply{setScale(factor,factor);postTranslate((vw-dw*factor)/2f,(vh-dh*factor)/2f)}
+  }
+  image.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->updateMatrix()}
   fun render(){
    val p=r.openPage(page)
    try{
     val ratio=resources.displayMetrics.widthPixels.toFloat()/p.width
-    val w=(p.width*ratio*zoom).toInt().coerceIn(250,2600)
-    val h=(p.height*ratio*zoom).toInt().coerceIn(250,3600)
+    val w=(p.width*ratio).toInt().coerceIn(250,1800)
+    val h=(p.height*ratio).toInt().coerceIn(250,2600)
     val bitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888)
     bitmap.eraseColor(Color.WHITE)
     p.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
     image.setImageBitmap(bitmap)
+    updateMatrix()
     status.text="${page+1} / ${r.pageCount}    ${if(books[current].bookmark==page)"🔖" else ""}"
    }finally{p.close()}
   }
   val scale=android.view.ScaleGestureDetector(this,object:android.view.ScaleGestureDetector.SimpleOnScaleGestureListener(){
    override fun onScale(detector:android.view.ScaleGestureDetector):Boolean{
     zoom=(zoom*detector.scaleFactor).coerceIn(0.5f,3.5f)
+    updateMatrix()
     return true
    }
-   override fun onScaleEnd(detector:android.view.ScaleGestureDetector){render()}
+   override fun onScaleEnd(detector:android.view.ScaleGestureDetector){updateMatrix()}
   })
   var downY=0f
   var downX=0f
