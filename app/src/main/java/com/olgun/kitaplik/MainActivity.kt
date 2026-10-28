@@ -215,7 +215,13 @@ class MainActivity : Activity() {
   val column=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE)}
   horizontal.addView(column,android.widget.FrameLayout.LayoutParams(-2,-2))
   scroll.addView(horizontal,android.widget.FrameLayout.LayoutParams(-1,-2))
-  val readerFrame=android.widget.FrameLayout(this)
+  var gestureFeed:((MotionEvent)->Unit)?=null
+  val readerFrame=object:android.widget.FrameLayout(this){
+   override fun dispatchTouchEvent(event:MotionEvent):Boolean{
+    gestureFeed?.invoke(event)
+    return super.dispatchTouchEvent(event)
+   }
+  }
   readerFrame.addView(scroll,android.widget.FrameLayout.LayoutParams(-1,-1))
   root.addView(readerFrame,LinearLayout.LayoutParams(-1,0,1f))
   val images=ArrayList<ImageView>()
@@ -317,10 +323,10 @@ class MainActivity : Activity() {
    }
    override fun onScaleEnd(detector:android.view.ScaleGestureDetector){commitZoom()}
   })
+  gestureFeed={event->scale.onTouchEvent(event)}
   var downX=0f;var downY=0f
   var taps=0;var lastTap=0L;var multiTouch=false
   scroll.setOnTouchListener{_,event->
-   scale.onTouchEvent(event)
    when(event.actionMasked){
     MotionEvent.ACTION_DOWN->{downX=event.x;downY=event.y;multiTouch=false}
     MotionEvent.ACTION_POINTER_DOWN->{multiTouch=true}
@@ -334,6 +340,7 @@ class MainActivity : Activity() {
    }
    multiTouch||scale.isInProgress
   }
+  horizontal.setOnTouchListener{_,event->scale.isInProgress || event.pointerCount>1}
   // Kontrast sadece ekranın sol kenarındaki özel dokunma şeridinden ayarlanır.
   val contrastEdge=View(this).apply{setBackgroundColor(Color.TRANSPARENT)}
   readerFrame.addView(contrastEdge,android.widget.FrameLayout.LayoutParams(dp(28),-1,Gravity.LEFT))
