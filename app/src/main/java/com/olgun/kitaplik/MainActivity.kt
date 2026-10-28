@@ -255,8 +255,9 @@ class MainActivity : Activity() {
   renderPage(page.coerceIn(0,r.pageCount-1))
   if(page!=0)renderPage(0)
   var rendering=false
+  var pinchActive=false
   fun updateVisible(){
-   if(rendering||scroll.height<=0)return
+   if(rendering||pinchActive||scroll.height<=0)return
    rendering=true
    try{
     val top=scroll.scrollY
@@ -277,38 +278,44 @@ class MainActivity : Activity() {
     if(page!=active){page=active;refreshBookmark()}
    }finally{rendering=false}
   }
-  // Zoom sırasında mevcut bitmapleri koru; yalnızca ölçüleri güncelle.
-  fun applyZoom(){
+  // Parmak hareketinde yerleşim hesaplaması yapma; sadece GPU ölçeklemesi kullan.
+  var pinchBase=zoom
+  fun previewZoom(){
    zoomLabel.text="${(zoom*100).toInt()}%"
-   for(i in images.indices){
-    val lp=images[i].layoutParams as LinearLayout.LayoutParams
-    val w=(pageWidths[i]*zoom).toInt().coerceAtLeast(1)
-    val h=(pageHeights[i]*zoom).toInt().coerceAtLeast(1)
-    if(lp.width!=w||lp.height!=h){
-     lp.width=w;lp.height=h;images[i].layoutParams=lp
+   val factor=zoom/pinchBase
+   for(img in images){
+    if(img.drawable!=null){
+     img.pivotX=0f;img.pivotY=0f
+     img.scaleX=factor;img.scaleY=factor
     }
    }
   }
-  val zoomHandler=Handler(Looper.getMainLooper())
-  var zoomFinish:Runnable?=null
-  fun finishZoom(){
-   zoomFinish?.let{zoomHandler.removeCallbacks(it)}
-   val task=Runnable{
-    // Görünen sayfalar önceden yüklenmişse yeniden PDF çözümleme yapılmaz.
-    updateVisible()
+  fun commitZoom(){
+   for(i in images.indices){
+    val img=images[i]
+    val lp=img.layoutParams as LinearLayout.LayoutParams
+    lp.width=(pageWidths[i]*zoom).toInt().coerceAtLeast(1)
+    lp.height=(pageHeights[i]*zoom).toInt().coerceAtLeast(1)
+    img.layoutParams=lp
+    img.scaleX=1f;img.scaleY=1f
    }
-   zoomFinish=task
-   zoomHandler.postDelayed(task,160)
+   pinchActive=false
+   column.requestLayout()
+   scroll.post{updateVisible()}
   }
   scroll.setOnScrollChangeListener{_,_,_,_,_->updateVisible()}
   scroll.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->updateVisible()}
   val scale=android.view.ScaleGestureDetector(this,object:android.view.ScaleGestureDetector.SimpleOnScaleGestureListener(){
-   override fun onScale(detector:android.view.ScaleGestureDetector):Boolean{
-    val next=(zoom*detector.scaleFactor).coerceIn(0.5f,if(isLandscape)5f else 3f)
-    if(kotlin.math.abs(next-zoom)>0.005f){zoom=next;applyZoom()}
+   override fun onScaleBegin(detector:android.view.ScaleGestureDetector):Boolean{
+    pinchBase=zoom;pinchActive=true
     return true
    }
-   override fun onScaleEnd(detector:android.view.ScaleGestureDetector){finishZoom()}
+   override fun onScale(detector:android.view.ScaleGestureDetector):Boolean{
+    val next=(zoom*detector.scaleFactor).coerceIn(0.5f,if(isLandscape)5f else 3f)
+    if(kotlin.math.abs(next-zoom)>0.002f){zoom=next;previewZoom()}
+    return true
+   }
+   override fun onScaleEnd(detector:android.view.ScaleGestureDetector){commitZoom()}
   })
   var downX=0f;var downY=0f
   var taps=0;var lastTap=0L;var multiTouch=false
