@@ -338,9 +338,9 @@ class MainActivity : Activity() {
      }
     }
    }
-   multiTouch||scale.isInProgress
+   // Tek parmakla dikey/yatay kaydırmayı ScrollView bileşenlerine bırak.
+   false
   }
-  horizontal.setOnTouchListener{_,event->scale.isInProgress || event.pointerCount>1}
   // Kontrast sadece ekranın sol kenarındaki özel dokunma şeridinden ayarlanır.
   val contrastEdge=View(this).apply{setBackgroundColor(Color.TRANSPARENT)}
   readerFrame.addView(contrastEdge,android.widget.FrameLayout.LayoutParams(dp(28),-1,Gravity.LEFT))
