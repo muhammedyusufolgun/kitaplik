@@ -284,40 +284,38 @@ class MainActivity : Activity() {
     if(page!=active){page=active;refreshBookmark()}
    }finally{rendering=false}
   }
-  // Parmak hareketinde yerleşim hesaplaması yapma; sadece GPU ölçeklemesi kullan.
+  // Sayfaları tek tek ölçeklemek komşu sayfaların üst üste binmesine neden olur.
+  // Bütün belgeyi tek katman olarak ölçekle; odak noktası parmakların orta noktasıdır.
   var pinchBase=zoom
-  var pinchCenterY=0f
-  var pinchCenterX=0f
+  var pinchFocusX=0f
+  var pinchFocusY=0f
+  var pinchAnchorX=0f
+  var pinchAnchorY=0f
   fun previewZoom(){
    zoomLabel.text="${(zoom*100).toInt()}%"
-   val factor=zoom/pinchBase
-   for(img in images){
-    if(img.drawable!=null){
-     img.pivotX=img.width/2f;img.pivotY=img.height/2f
-     img.scaleX=factor;img.scaleY=factor
-    }
-   }
+   val factor=zoom/pinchBase.coerceAtLeast(0.01f)
+   column.scaleX=factor
+   column.scaleY=factor
   }
   fun commitZoom(){
-   val oldZoom=pinchBase.coerceAtLeast(0.01f)
-   val factor=zoom/oldZoom
-   val oldCenterY=scroll.scrollY+scroll.height/2f
-   val oldCenterX=horizontal.scrollX+horizontal.width/2f
+   val factor=zoom/pinchBase.coerceAtLeast(0.01f)
+   // Önce GPU önizlemesini kaldır, sonra gerçek sayfa ölçülerini bir kez değiştir.
+   column.scaleX=1f
+   column.scaleY=1f
    for(i in images.indices){
     val img=images[i]
     val lp=img.layoutParams as LinearLayout.LayoutParams
     lp.width=(pageWidths[i]*zoom).toInt().coerceAtLeast(1)
     lp.height=(pageHeights[i]*zoom).toInt().coerceAtLeast(1)
     img.layoutParams=lp
-    img.scaleX=1f;img.scaleY=1f
    }
-   pinchActive=false
    column.requestLayout()
    scroll.post{
-    val targetY=(oldCenterY*factor-scroll.height/2f).toInt().coerceAtLeast(0)
+    val targetY=(pinchAnchorY*factor-scroll.height/2f).toInt().coerceAtLeast(0)
+    val targetX=(pinchAnchorX*factor-horizontal.width/2f).toInt().coerceAtLeast(0)
     scroll.scrollTo(0,targetY)
-    val targetX=(oldCenterX*factor-horizontal.width/2f).toInt().coerceAtLeast(0)
     horizontal.scrollTo(targetX,0)
+    pinchActive=false
     updateVisible()
    }
   }
@@ -326,6 +324,12 @@ class MainActivity : Activity() {
   val scale=android.view.ScaleGestureDetector(this,object:android.view.ScaleGestureDetector.SimpleOnScaleGestureListener(){
    override fun onScaleBegin(detector:android.view.ScaleGestureDetector):Boolean{
     pinchBase=zoom;pinchActive=true
+    pinchFocusX=detector.focusX
+    pinchFocusY=detector.focusY
+    pinchAnchorX=horizontal.scrollX+pinchFocusX
+    pinchAnchorY=scroll.scrollY+pinchFocusY
+    column.pivotX=pinchAnchorX
+    column.pivotY=pinchAnchorY
     return true
    }
    override fun onScale(detector:android.view.ScaleGestureDetector):Boolean{
