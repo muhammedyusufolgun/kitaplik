@@ -212,9 +212,9 @@ class MainActivity : Activity() {
   val horizontal=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isFillViewport=true}
   val scroll=ScrollView(this).apply{isVerticalScrollBarEnabled=false;isFillViewport=true}
   val column=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE)}
-  horizontal.addView(scroll,android.widget.FrameLayout.LayoutParams(-1,-1))
-  scroll.addView(column,android.widget.FrameLayout.LayoutParams(-2,-2))
-  root.addView(horizontal,LinearLayout.LayoutParams(-1,0,1f))
+  horizontal.addView(column,android.widget.FrameLayout.LayoutParams(-2,-2))
+  scroll.addView(horizontal,android.widget.FrameLayout.LayoutParams(-1,-2))
+  root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
   val images=ArrayList<ImageView>()
   val pageHeights=ArrayList<Int>()
   val pageWidths=ArrayList<Int>()
@@ -244,6 +244,7 @@ class MainActivity : Activity() {
    }catch(e:Exception){android.util.Log.e("Kitaplik","PDF sayfa görüntüsü oluşturulamadı: $i",e)}
   }
   renderPage(page.coerceIn(0,r.pageCount-1))
+  if(page!=0)renderPage(0)
   var rendering=false
   fun updateVisible(){
    if(rendering||scroll.height<=0)return
