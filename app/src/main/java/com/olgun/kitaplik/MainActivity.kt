@@ -80,7 +80,7 @@ class MainActivity : Activity() {
  private fun openBook(i:Int){try{closePdf();descriptor=android.os.ParcelFileDescriptor.open(File(books[i].path),android.os.ParcelFileDescriptor.MODE_READ_ONLY);renderer=PdfRenderer(descriptor!!);current=i;page=books[i].bookmark.takeIf{it>=0}?:0;page=page.coerceIn(0,renderer!!.pageCount-1);reader()}catch(e:Exception){Toast.makeText(this,"PDF açılamadı: ${e.message}",Toast.LENGTH_LONG).show();home()}}
  private fun reader(){val r=renderer?:return;init(books[current].name);val bar=root.getChildAt(0) as LinearLayout;bar.addView(button("Geri"){home()})
  val status=text("",14f,true);root.addView(status)
- val sc=ScrollView(this).apply{fillViewport=false};root.addView(sc,LinearLayout.LayoutParams(-1,0,1f));val image=ImageView(this).apply{adjustViewBounds=true;scaleType=ImageView.ScaleType.FIT_CENTER};sc.addView(image)
+ val sc=ScrollView(this).apply{isFillViewport=false};root.addView(sc,LinearLayout.LayoutParams(-1,0,1f));val image=ImageView(this).apply{adjustViewBounds=true;scaleType=ImageView.ScaleType.FIT_CENTER};sc.addView(image)
  fun render(){val p=r.openPage(page);val w=(p.width*zoom).toInt().coerceIn(200,2500);val h=(p.height*zoom).toInt().coerceIn(200,3500);val bmp=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);bmp.eraseColor(Color.WHITE);p.render(bmp,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);p.close();image.setImageBitmap(bmp);status.text="${page+1} / ${r.pageCount} sayfa";sc.scrollTo(0,0)}
  val controls=LinearLayout(this).apply{gravity=Gravity.CENTER;orientation=LinearLayout.VERTICAL};root.addView(controls)
  val nav=LinearLayout(this);controls.addView(nav)
