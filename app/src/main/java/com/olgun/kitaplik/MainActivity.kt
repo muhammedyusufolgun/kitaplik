@@ -212,9 +212,9 @@ class MainActivity : Activity() {
   val horizontal=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isFillViewport=true}
   val scroll=ScrollView(this).apply{isVerticalScrollBarEnabled=false;isFillViewport=true}
   val column=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE)}
-  horizontal.addView(scroll,android.widget.FrameLayout.LayoutParams(-1,-1))
-  scroll.addView(column)
-  root.addView(horizontal,LinearLayout.LayoutParams(-1,0,1f))
+  horizontal.addView(column,android.widget.FrameLayout.LayoutParams(-2,-2))
+  scroll.addView(horizontal,android.widget.FrameLayout.LayoutParams(-1,-2))
+  root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
   val images=ArrayList<ImageView>()
   val pageHeights=ArrayList<Int>()
   val pageWidths=ArrayList<Int>()
@@ -289,6 +289,7 @@ class MainActivity : Activity() {
    scroll.post{updateVisible()}
   }
   scroll.setOnScrollChangeListener{_,_,_,_,_->updateVisible()}
+  scroll.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->updateVisible()}
   val scale=android.view.ScaleGestureDetector(this,object:android.view.ScaleGestureDetector.SimpleOnScaleGestureListener(){
    override fun onScale(detector:android.view.ScaleGestureDetector):Boolean{
     val next=(zoom*detector.scaleFactor).coerceIn(0.5f,if(isLandscape)5f else 3f)
