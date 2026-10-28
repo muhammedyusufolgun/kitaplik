@@ -212,9 +212,9 @@ class MainActivity : Activity() {
   val horizontal=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isFillViewport=true}
   val scroll=ScrollView(this).apply{isVerticalScrollBarEnabled=false;isFillViewport=true}
   val column=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE)}
-  horizontal.addView(column,android.widget.FrameLayout.LayoutParams(-2,-2))
-  scroll.addView(horizontal,android.widget.FrameLayout.LayoutParams(-1,-2))
-  root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
+  horizontal.addView(scroll,android.widget.FrameLayout.LayoutParams(-1,-1))
+  scroll.addView(column,android.widget.FrameLayout.LayoutParams(-2,-2))
+  root.addView(horizontal,LinearLayout.LayoutParams(-1,0,1f))
   val images=ArrayList<ImageView>()
   val pageHeights=ArrayList<Int>()
   val pageWidths=ArrayList<Int>()
@@ -229,6 +229,21 @@ class MainActivity : Activity() {
    images.add(img)
    column.addView(img,LinearLayout.LayoutParams(w,h).apply{bottomMargin=dp(3)})
   }
+  fun renderPage(i:Int){
+   if(i !in images.indices || images[i].drawable!=null)return
+   try{
+    val p=r.openPage(i)
+    try{
+     val w=pageWidths[i].coerceIn(200,1200)
+     val h=pageHeights[i].coerceIn(200,1800)
+     val bmp=Bitmap.createBitmap(w,h,Bitmap.Config.RGB_565)
+     bmp.eraseColor(Color.WHITE)
+     p.render(bmp,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+     images[i].setImageBitmap(bmp)
+    }finally{p.close()}
+   }catch(e:Exception){android.util.Log.e("Kitaplik","PDF sayfa görüntüsü oluşturulamadı: $i",e)}
+  }
+  renderPage(page.coerceIn(0,r.pageCount-1))
   var rendering=false
   fun updateVisible(){
    if(rendering||scroll.height<=0)return
@@ -245,36 +260,14 @@ class MainActivity : Activity() {
      val distance=kotlin.math.abs(center-(top+scroll.height/2))
      if(distance<bestDistance){bestDistance=distance;active=i}
      val visible=y+h>=top-scroll.height && y<=bottom+scroll.height
-     if(visible && images[i].drawable==null){
-      try{
-       val p=r.openPage(i)
-       try{
-        val w=(pageWidths[i]*zoom).toInt().coerceIn(200,1200)
-        val bh=(pageHeights[i]*zoom).toInt().coerceIn(200,1800)
-        val bmp=Bitmap.createBitmap(w,bh,Bitmap.Config.RGB_565)
-        bmp.eraseColor(Color.WHITE)
-        p.render(bmp,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-        images[i].setImageBitmap(bmp)
-       }finally{p.close()}
-      }catch(e:Exception){
-       android.util.Log.e("Kitaplik","PDF sayfası ${i+1} çizilemedi",e)
-      }catch(e:OutOfMemoryError){
-       android.util.Log.e("Kitaplik","PDF görüntüleme belleği yetersiz",e)
-       images.forEach{it.setImageDrawable(null)}
-       System.gc()
-      }
-     }else if(!visible && images[i].drawable!=null){
-      images[i].setImageDrawable(null)
-     }
+     if(visible)renderPage(i)
+     else if(images[i].drawable!=null)images[i].setImageDrawable(null)
      y+=h
     }
     if(page!=active){page=active;refreshBookmark()}
    }finally{rendering=false}
   }
   fun applyZoom(){
-   val oldCenter=scroll.scrollY+scroll.height/2
-   val oldWidth=(pageWidths.firstOrNull()?:screenWidth).coerceAtLeast(1)
-   val oldScaled=(oldWidth*zoom).toInt().coerceAtLeast(1)
    zoomLabel.text="${(zoom*100).toInt()}%"
    for(i in images.indices){
     val lp=images[i].layoutParams as LinearLayout.LayoutParams
@@ -286,7 +279,7 @@ class MainActivity : Activity() {
     // Drawable is detached; Android manages bitmap lifetime.
    }
    column.requestLayout()
-   scroll.post{updateVisible()}
+   scroll.post{renderPage(page);updateVisible()}
   }
   scroll.setOnScrollChangeListener{_,_,_,_,_->updateVisible()}
   scroll.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->updateVisible()}
