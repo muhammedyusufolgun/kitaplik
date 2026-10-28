@@ -277,28 +277,38 @@ class MainActivity : Activity() {
     if(page!=active){page=active;refreshBookmark()}
    }finally{rendering=false}
   }
+  // Zoom sırasında mevcut bitmapleri koru; yalnızca ölçüleri güncelle.
   fun applyZoom(){
    zoomLabel.text="${(zoom*100).toInt()}%"
    for(i in images.indices){
     val lp=images[i].layoutParams as LinearLayout.LayoutParams
-    lp.width=(pageWidths[i]*zoom).toInt().coerceAtLeast(1)
-    lp.height=(pageHeights[i]*zoom).toInt().coerceAtLeast(1)
-    images[i].layoutParams=lp
-    val old=images[i].drawable
-    images[i].setImageDrawable(null)
-    // Drawable is detached; Android manages bitmap lifetime.
+    val w=(pageWidths[i]*zoom).toInt().coerceAtLeast(1)
+    val h=(pageHeights[i]*zoom).toInt().coerceAtLeast(1)
+    if(lp.width!=w||lp.height!=h){
+     lp.width=w;lp.height=h;images[i].layoutParams=lp
+    }
    }
-   column.requestLayout()
-   scroll.post{renderPage(page);updateVisible()}
+  }
+  val zoomHandler=Handler(Looper.getMainLooper())
+  var zoomFinish:Runnable?=null
+  fun finishZoom(){
+   zoomFinish?.let{zoomHandler.removeCallbacks(it)}
+   val task=Runnable{
+    // Görünen sayfalar önceden yüklenmişse yeniden PDF çözümleme yapılmaz.
+    updateVisible()
+   }
+   zoomFinish=task
+   zoomHandler.postDelayed(task,160)
   }
   scroll.setOnScrollChangeListener{_,_,_,_,_->updateVisible()}
   scroll.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->updateVisible()}
   val scale=android.view.ScaleGestureDetector(this,object:android.view.ScaleGestureDetector.SimpleOnScaleGestureListener(){
    override fun onScale(detector:android.view.ScaleGestureDetector):Boolean{
     val next=(zoom*detector.scaleFactor).coerceIn(0.5f,if(isLandscape)5f else 3f)
-    if(kotlin.math.abs(next-zoom)>0.01f){zoom=next;applyZoom()}
+    if(kotlin.math.abs(next-zoom)>0.005f){zoom=next;applyZoom()}
     return true
    }
+   override fun onScaleEnd(detector:android.view.ScaleGestureDetector){finishZoom()}
   })
   var downX=0f;var downY=0f
   var taps=0;var lastTap=0L;var multiTouch=false
