@@ -212,7 +212,7 @@ class MainActivity : Activity() {
   bookmarkButton.setOnClickListener{toggleBookmark()}
   val horizontal=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isFillViewport=true}
   val scroll=ScrollView(this).apply{isVerticalScrollBarEnabled=false;isFillViewport=true}
-  val column=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE)}
+  val column=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_HORIZONTAL;setBackgroundColor(Color.WHITE)}
   horizontal.addView(column,android.widget.FrameLayout.LayoutParams(-2,-2))
   scroll.addView(horizontal,android.widget.FrameLayout.LayoutParams(-1,-2))
   var gestureFeed:((MotionEvent)->Unit)?=null
@@ -286,17 +286,23 @@ class MainActivity : Activity() {
   }
   // Parmak hareketinde yerleşim hesaplaması yapma; sadece GPU ölçeklemesi kullan.
   var pinchBase=zoom
+  var pinchCenterY=0f
+  var pinchCenterX=0f
   fun previewZoom(){
    zoomLabel.text="${(zoom*100).toInt()}%"
    val factor=zoom/pinchBase
    for(img in images){
     if(img.drawable!=null){
-     img.pivotX=0f;img.pivotY=0f
+     img.pivotX=img.width/2f;img.pivotY=img.height/2f
      img.scaleX=factor;img.scaleY=factor
     }
    }
   }
   fun commitZoom(){
+   val oldZoom=pinchBase.coerceAtLeast(0.01f)
+   val factor=zoom/oldZoom
+   val oldCenterY=scroll.scrollY+scroll.height/2f
+   val oldCenterX=horizontal.scrollX+horizontal.width/2f
    for(i in images.indices){
     val img=images[i]
     val lp=img.layoutParams as LinearLayout.LayoutParams
@@ -307,7 +313,13 @@ class MainActivity : Activity() {
    }
    pinchActive=false
    column.requestLayout()
-   scroll.post{updateVisible()}
+   scroll.post{
+    val targetY=(oldCenterY*factor-scroll.height/2f).toInt().coerceAtLeast(0)
+    scroll.scrollTo(0,targetY)
+    val targetX=(oldCenterX*factor-horizontal.width/2f).toInt().coerceAtLeast(0)
+    horizontal.scrollTo(targetX,0)
+    updateVisible()
+   }
   }
   scroll.setOnScrollChangeListener{_,_,_,_,_->updateVisible()}
   scroll.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->updateVisible()}
