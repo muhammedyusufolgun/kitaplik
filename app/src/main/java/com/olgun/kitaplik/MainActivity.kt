@@ -190,15 +190,17 @@ class MainActivity : Activity() {
   val status=text("",12f,true).apply{setPadding(2,0,2,0)}
   root.addView(View(this),LinearLayout.LayoutParams(-1,dp(20)))
   root.addView(status,LinearLayout.LayoutParams(-1,dp(28)))
+  val controls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+  val zoomLabel=text("100%",14f,true).apply{setPadding(dp(4),0,dp(4),0)}
+  controls.addView(zoomLabel,LinearLayout.LayoutParams(dp(72),dp(36)))
   val bookmarkButton=text("",14f,true).apply{setPadding(2,0,2,0)}
-  root.addView(bookmarkButton,LinearLayout.LayoutParams(-1,dp(36)))
+  controls.addView(bookmarkButton,LinearLayout.LayoutParams(0,dp(36),1f))
+  root.addView(controls,LinearLayout.LayoutParams(-1,dp(36)))
   fun refreshBookmark(){bookmarkButton.text=if(books[current].bookmark==page)"Sayfa Ayıracını Kaldır" else "Sayfa Ayıracı Ekle"}
   fun toggleBookmark(){books[current].bookmark=if(books[current].bookmark==page)-1 else page;save();refreshBookmark();status.text="${page+1} / ${r.pageCount}    ${if(books[current].bookmark==page)"🔖" else ""}";Toast.makeText(this,if(books[current].bookmark==page)"Sayfa imi eklendi" else "Sayfa imi kaldırıldı",Toast.LENGTH_SHORT).show()}
   bookmarkButton.setOnClickListener{toggleBookmark()}
   val image=ImageView(this).apply{scaleType=ImageView.ScaleType.MATRIX;setBackgroundColor(Color.WHITE)}
   root.addView(image,LinearLayout.LayoutParams(-1,0,1f))
-  var baseWidth=1f
-  var baseHeight=1f
   fun updateMatrix(){
    val drawable=image.drawable?:return
    val vw=image.width.toFloat();val vh=image.height.toFloat()
@@ -207,6 +209,7 @@ class MainActivity : Activity() {
    val fit=minOf(vw/dw,vh/dh)
    val factor=fit*zoom
    image.imageMatrix=Matrix().apply{setScale(factor,factor);postTranslate((vw-dw*factor)/2f,(vh-dh*factor)/2f)}
+   zoomLabel.text="${(zoom*100).toInt()}%"
   }
   image.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->updateMatrix()}
   fun render(){
@@ -226,7 +229,7 @@ class MainActivity : Activity() {
   }
   val scale=android.view.ScaleGestureDetector(this,object:android.view.ScaleGestureDetector.SimpleOnScaleGestureListener(){
    override fun onScale(detector:android.view.ScaleGestureDetector):Boolean{
-    zoom=(zoom*detector.scaleFactor).coerceIn(0.5f,3.5f)
+    zoom=(zoom*detector.scaleFactor).coerceIn(0.5f,3f)
     updateMatrix()
     return true
    }
