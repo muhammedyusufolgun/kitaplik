@@ -197,15 +197,13 @@ class MainActivity : Activity() {
   val status=text("",12f,true).apply{setPadding(2,0,2,0)}
   if(!isLandscape)root.addView(View(this),LinearLayout.LayoutParams(-1,dp(20)))
   root.addView(status,LinearLayout.LayoutParams(-1,dp(28)))
-  val controls=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+  val controls=android.widget.FrameLayout(this)
   val zoomLabel=text("",14f,true).apply{setPadding(dp(4),0,dp(4),0)}
-  controls.addView(zoomLabel,LinearLayout.LayoutParams(dp(72),dp(36)))
-  val bookmarkButton=text("",14f,true).apply{setPadding(2,0,2,0)}
-  val gotoBookmarkButton=text("(Ayıraca git)",14f,true).apply{setPadding(2,0,2,0)}
-  val bookmarkArea=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
-  bookmarkArea.addView(bookmarkButton,LinearLayout.LayoutParams(0,dp(36),1f))
-  bookmarkArea.addView(gotoBookmarkButton,LinearLayout.LayoutParams(-2,dp(36)))
-  controls.addView(bookmarkArea,LinearLayout.LayoutParams(0,dp(36),1f))
+  controls.addView(zoomLabel,android.widget.FrameLayout.LayoutParams(dp(72),dp(36),Gravity.START or Gravity.CENTER_VERTICAL))
+  val bookmarkButton=text("",14f,true).apply{setPadding(2,0,2,0);gravity=Gravity.CENTER}
+  controls.addView(bookmarkButton,android.widget.FrameLayout.LayoutParams(-2,dp(36),Gravity.CENTER))
+  val gotoBookmarkButton=text("(Ayıraca git)",14f,true).apply{setPadding(2,0,2,0);gravity=Gravity.CENTER}
+  controls.addView(gotoBookmarkButton,android.widget.FrameLayout.LayoutParams(-2,dp(36),Gravity.END or Gravity.CENTER_VERTICAL))
   root.addView(controls,LinearLayout.LayoutParams(-1,dp(36)))
   fun refreshBookmark(){
    bookmarkButton.text=if(books[current].bookmark==page)"Sayfa Ayıracını Kaldır" else "Sayfa Ayıracı Ekle"
