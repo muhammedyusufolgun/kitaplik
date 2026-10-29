@@ -17,7 +17,7 @@ import java.io.FileOutputStream
 import android.graphics.pdf.PdfRenderer
 
 class MainActivity : Activity() {
- data class Book(var name:String,var path:String,var cover:String="",var bookmark:Int=-1)
+ data class Book(var name:String,var path:String,var cover:String="",var bookmark:Int=-1,var lastPage:Int=0)
  private val books=mutableListOf<Book>()
  private lateinit var root:LinearLayout
  private val prefs by lazy { getSharedPreferences("books",MODE_PRIVATE) }
@@ -41,8 +41,8 @@ class MainActivity : Activity() {
  private var renderer:PdfRenderer?=null
  private var descriptor:android.os.ParcelFileDescriptor?=null
  override fun onCreate(savedInstanceState:Bundle?) { super.onCreate(savedInstanceState); window.statusBarColor=android.graphics.Color.WHITE; window.navigationBarColor=android.graphics.Color.WHITE; window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR; load(); home() }
- private fun load(){ val a=JSONArray(prefs.getString("items","[]")); for(i in 0 until a.length()){val j=a.getJSONObject(i);books.add(Book(j.getString("name"),j.getString("path"),j.optString("cover"),j.optInt("bookmark",-1)))} }
- private fun save(){val a=JSONArray(); books.forEach { a.put(JSONObject().put("name",it.name).put("path",it.path).put("cover",it.cover).put("bookmark",it.bookmark)) };prefs.edit().putString("items",a.toString()).apply()}
+ private fun load(){ val a=JSONArray(prefs.getString("items","[]")); for(i in 0 until a.length()){val j=a.getJSONObject(i);books.add(Book(j.getString("name"),j.getString("path"),j.optString("cover"),j.optInt("bookmark",-1),j.optInt("lastPage",0)))} }
+ private fun save(){val a=JSONArray(); books.forEach { a.put(JSONObject().put("name",it.name).put("path",it.path).put("cover",it.cover).put("bookmark",it.bookmark).put("lastPage",it.lastPage)) };prefs.edit().putString("items",a.toString()).apply()}
  private fun text(s:String,size:Float=16f,bold:Boolean=false):TextView=TextView(this).apply{ text=s;textSize=size;setTextColor(Color.rgb(50,50,50));gravity=Gravity.CENTER;setPadding(8,10,8,10);if(bold)setTypeface(null,1)}
  private fun button(s:String,action:()->Unit)=Button(this).apply{text=s;setAllCaps(false);setOnClickListener{action()}}
  private fun init(title:String){root=LinearLayout(this).apply{orientation=1;setBackgroundColor(Color.WHITE);setPadding(8,dp(26),8,4)};setContentView(root)}
@@ -62,6 +62,7 @@ class MainActivity : Activity() {
  private fun wood(color:Int):GradientDrawable=GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
   intArrayOf(Color.rgb(247,222,181),color,Color.rgb(102,59,32))).apply{cornerRadius=dp(5).toFloat()}
  private fun home(){
+  persistReadingPage()
   current=-1;closePdf();init("Kitaplık")
   val header=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL;setPadding(dp(8),0,dp(8),0)}
   header.addView(text("Kitaplık",24f,true).apply{gravity=Gravity.CENTER_VERTICAL or Gravity.START;setOnClickListener{exitEditMode()}},LinearLayout.LayoutParams(0,dp(60),1f))
@@ -184,8 +185,9 @@ class MainActivity : Activity() {
  if(requestCode==pickPdf){val uris=mutableListOf<Uri>();data.clipData?.let{for(i in 0 until it.itemCount)uris.add(it.getItemAt(i).uri)}?:data.data?.let{uris.add(it)}
  uris.forEach{uri->try{var name="Kitap.pdf";contentResolver.query(uri,null,null,null,null)?.use{if(it.moveToFirst()){val n=it.getColumnIndex(OpenableColumns.DISPLAY_NAME);if(n>=0)name=it.getString(n)}};val f=File(filesDir,"book_${System.nanoTime()}.pdf");contentResolver.openInputStream(uri)!!.use{input->f.outputStream().use{input.copyTo(it)}};val empty=books.indexOfFirst{it.path.isEmpty()};if(empty>=0)books[empty]=Book(name,f.path) else books.add(Book(name,f.path))}catch(e:Exception){Toast.makeText(this,"Dosya eklenemedi: ${e.message}",Toast.LENGTH_LONG).show()}};save();home()
  }else if(requestCode==pickCover&&coverIndex in books.indices){try{val f=File(filesDir,"cover_${System.nanoTime()}.png");contentResolver.openInputStream(data.data!!)!!.use{input->f.outputStream().use{input.copyTo(it)}};books[coverIndex].cover=f.path;save();home()}catch(e:Exception){Toast.makeText(this,"Kapak açılamadı",Toast.LENGTH_SHORT).show()}}}
+ private fun persistReadingPage(){if(current in books.indices && renderer!=null){books[current].lastPage=page.coerceAtLeast(0);save()}}
  private fun closePdf(){try{renderer?.close();descriptor?.close()}catch(_:Exception){};renderer=null;descriptor=null}
- private fun openBook(i:Int){if(deleteMode)return;try{closePdf();descriptor=android.os.ParcelFileDescriptor.open(File(books[i].path),android.os.ParcelFileDescriptor.MODE_READ_ONLY);renderer=PdfRenderer(descriptor!!);current=i;page=books[i].bookmark.takeIf{it>=0}?:0;page=page.coerceIn(0,renderer!!.pageCount-1);zoom=1f;reader()}catch(e:Exception){Toast.makeText(this,"PDF açılamadı: ${e.message}",Toast.LENGTH_LONG).show();home()}}
+ private fun openBook(i:Int){if(deleteMode)return;try{closePdf();descriptor=android.os.ParcelFileDescriptor.open(File(books[i].path),android.os.ParcelFileDescriptor.MODE_READ_ONLY);renderer=PdfRenderer(descriptor!!);current=i;page=books[i].lastPage;page=page.coerceIn(0,renderer!!.pageCount-1);zoom=1f;reader()}catch(e:Exception){Toast.makeText(this,"PDF açılamadı: ${e.message}",Toast.LENGTH_LONG).show();home()}}
  private fun reader(){
   val r=renderer?:return
   init(books[current].name)
@@ -199,10 +201,15 @@ class MainActivity : Activity() {
   val zoomLabel=text("",14f,true).apply{setPadding(dp(4),0,dp(4),0)}
   controls.addView(zoomLabel,LinearLayout.LayoutParams(dp(72),dp(36)))
   val bookmarkButton=text("",14f,true).apply{setPadding(2,0,2,0)}
-  controls.addView(bookmarkButton,LinearLayout.LayoutParams(0,dp(36),1f))
+  val gotoBookmarkButton=text("Ayıraca git",14f,true).apply{setPadding(2,0,2,0)}
+  val bookmarkArea=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
+  bookmarkArea.addView(bookmarkButton,LinearLayout.LayoutParams(-2,dp(36)))
+  bookmarkArea.addView(gotoBookmarkButton,LinearLayout.LayoutParams(-2,dp(36)))
+  controls.addView(bookmarkArea,LinearLayout.LayoutParams(0,dp(36),1f))
   root.addView(controls,LinearLayout.LayoutParams(-1,dp(36)))
   fun refreshBookmark(){
    bookmarkButton.text=if(books[current].bookmark==page)"Sayfa Ayıracını Kaldır" else "Sayfa Ayıracı Ekle"
+   gotoBookmarkButton.visibility=if(books[current].bookmark>=0)View.VISIBLE else View.GONE
    status.text="${page+1} / ${r.pageCount}    ${if(books[current].bookmark==page)"🔖" else ""}"
   }
   fun toggleBookmark(){
@@ -211,6 +218,8 @@ class MainActivity : Activity() {
    Toast.makeText(this,if(books[current].bookmark==page)"Sayfa imi eklendi" else "Sayfa imi kaldırıldı",Toast.LENGTH_SHORT).show()
   }
   bookmarkButton.setOnClickListener{toggleBookmark()}
+  var jumpToPage:((Int)->Unit)?=null
+  gotoBookmarkButton.setOnClickListener{val target=books[current].bookmark;if(target>=0)jumpToPage?.invoke(target)}
   val horizontal=HorizontalScrollView(this).apply{isHorizontalScrollBarEnabled=false;isFillViewport=true}
   val scroll=ScrollView(this).apply{isVerticalScrollBarEnabled=false;isFillViewport=true}
   val column=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER_HORIZONTAL;setBackgroundColor(Color.WHITE)}
@@ -282,8 +291,14 @@ class MainActivity : Activity() {
      else if(images[i].drawable!=null)images[i].setImageDrawable(null)
      y+=h
     }
-    if(page!=active){page=active;refreshBookmark()}
+    if(page!=active){page=active;books[current].lastPage=page;save();refreshBookmark()}
    }finally{rendering=false}
+  }
+  jumpToPage={target->
+   val destination=target.coerceIn(0,r.pageCount-1)
+   page=destination;books[current].lastPage=page;save()
+   val y=(0 until destination).sumOf{images[it].layoutParams.height+dp(3)}
+   scroll.scrollTo(0,y);renderPage(destination);refreshBookmark();scroll.post{updateVisible()}
   }
   // Sayfaları tek tek ölçeklemek komşu sayfaların üst üste binmesine neden olur.
   // Bütün belgeyi tek katman olarak ölçekle; odak noktası parmakların orta noktasıdır.
@@ -388,5 +403,5 @@ class MainActivity : Activity() {
   if(current>=0)reader() else home()
  }
  override fun onBackPressed(){if(current>=0){requestedOrientation=android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;home()}else super.onBackPressed()}
- override fun onDestroy(){cancelModeTimeout();closePdf();super.onDestroy()}
+ override fun onDestroy(){persistReadingPage();cancelModeTimeout();closePdf();super.onDestroy()}
 }
