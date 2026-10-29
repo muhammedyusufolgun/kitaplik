@@ -201,9 +201,9 @@ class MainActivity : Activity() {
   val zoomLabel=text("",14f,true).apply{setPadding(dp(4),0,dp(4),0)}
   controls.addView(zoomLabel,LinearLayout.LayoutParams(dp(72),dp(36)))
   val bookmarkButton=text("",14f,true).apply{setPadding(2,0,2,0)}
-  val gotoBookmarkButton=text("Ayıraca git",14f,true).apply{setPadding(2,0,2,0)}
-  val bookmarkArea=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER}
-  bookmarkArea.addView(bookmarkButton,LinearLayout.LayoutParams(-2,dp(36)))
+  val gotoBookmarkButton=text("(Ayıraca git)",14f,true).apply{setPadding(2,0,2,0)}
+  val bookmarkArea=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
+  bookmarkArea.addView(bookmarkButton,LinearLayout.LayoutParams(0,dp(36),1f))
   bookmarkArea.addView(gotoBookmarkButton,LinearLayout.LayoutParams(-2,dp(36)))
   controls.addView(bookmarkArea,LinearLayout.LayoutParams(0,dp(36),1f))
   root.addView(controls,LinearLayout.LayoutParams(-1,dp(36)))
@@ -335,8 +335,10 @@ class MainActivity : Activity() {
     updateVisible()
    }
   }
-  scroll.setOnScrollChangeListener{_,_,_,_,_->updateVisible()}
-  scroll.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->updateVisible()}
+  scroll.setOnScrollChangeListener{_,_,_,_,_->if(initialPositionRestored)updateVisible()}
+  // İlk yerleşim bitmeden görünür sayfa hesaplaması kayıtlı sayfayı sıfırlamamalı.
+  var initialPositionRestored=false
+  scroll.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->if(initialPositionRestored)updateVisible()}
   val scale=android.view.ScaleGestureDetector(this,object:android.view.ScaleGestureDetector.SimpleOnScaleGestureListener(){
    override fun onScaleBegin(detector:android.view.ScaleGestureDetector):Boolean{
     pinchBase=zoom;pinchActive=true
@@ -391,10 +393,11 @@ class MainActivity : Activity() {
   }
   refreshBookmark()
   zoomLabel.text="${(zoom*100).toInt()}%"
+  val resumePage=page.coerceIn(0,r.pageCount-1)
   scroll.post{
-   var target=0
-   for(i in 0 until page.coerceIn(0,r.pageCount-1))target+=pageHeights[i]+dp(3)
-   scroll.scrollTo(0,(target*zoom).toInt())
+   val target=(0 until resumePage).sumOf{images[it].layoutParams.height+dp(3)}
+   scroll.scrollTo(0,target)
+   initialPositionRestored=true
    updateVisible()
   }
  }
