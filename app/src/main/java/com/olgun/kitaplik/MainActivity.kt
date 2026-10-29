@@ -335,9 +335,9 @@ class MainActivity : Activity() {
     updateVisible()
    }
   }
-  scroll.setOnScrollChangeListener{_,_,_,_,_->if(initialPositionRestored)updateVisible()}
   // İlk yerleşim bitmeden görünür sayfa hesaplaması kayıtlı sayfayı sıfırlamamalı.
   var initialPositionRestored=false
+  scroll.setOnScrollChangeListener{_,_,_,_,_->if(initialPositionRestored)updateVisible()}
   scroll.addOnLayoutChangeListener{_,_,_,_,_,_,_,_,_->if(initialPositionRestored)updateVisible()}
   val scale=android.view.ScaleGestureDetector(this,object:android.view.ScaleGestureDetector.SimpleOnScaleGestureListener(){
    override fun onScaleBegin(detector:android.view.ScaleGestureDetector):Boolean{
