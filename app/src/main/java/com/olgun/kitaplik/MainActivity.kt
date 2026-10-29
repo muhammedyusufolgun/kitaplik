@@ -26,8 +26,8 @@ class MainActivity : Activity() {
  private val modeHandler=Handler(Looper.getMainLooper())
  private var modeTimeout:Runnable?=null
  private fun cancelModeTimeout(){modeTimeout?.let{modeHandler.removeCallbacks(it)};modeTimeout=null}
- private fun scheduleModeTimeout(){cancelModeTimeout();if(sorting||editMode||deleteMode){val task=Runnable{if(current<0&&(sorting||editMode||deleteMode)){sorting=false;editMode=false;deleteMode=false;selectedDelete.clear();selectedMove=-1;home()}};modeTimeout=task;modeHandler.postDelayed(task,5000)}}
- private fun exitEditMode(){if(sorting||editMode||deleteMode){sorting=false;editMode=false;deleteMode=false;selectedDelete.clear();selectedMove=-1;cancelModeTimeout();home()}}
+ private fun scheduleModeTimeout(){cancelModeTimeout();if(sorting||editMode){val task=Runnable{if(current<0&&(sorting||editMode)){sorting=false;editMode=false;deleteMode=false;selectedDelete.clear();selectedMove=-1;home()}};modeTimeout=task;modeHandler.postDelayed(task,5000)}}
+ private fun exitEditMode(){if(sorting||editMode){sorting=false;editMode=false;deleteMode=false;selectedDelete.clear();selectedMove=-1;cancelModeTimeout();home()}}
  private val selectedDelete=mutableSetOf<Int>()
  private val pickPdf=100
  private val pickCover=101
@@ -73,7 +73,8 @@ class MainActivity : Activity() {
   root.addView(sc,LinearLayout.LayoutParams(-1,0,1f))
   val stack=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(Color.WHITE);setOnClickListener{exitEditMode()}}
   sc.addView(stack)
-  val rows=maxOf(4,(books.size+3)/4)
+  val lastOccupied=books.indexOfLast{it.path.isNotEmpty()}+1
+  val rows=maxOf(4,(lastOccupied+3)/4)
   for(r in 0 until rows){
    val shelf=LinearLayout(this).apply{
     orientation=LinearLayout.VERTICAL
@@ -148,7 +149,7 @@ class MainActivity : Activity() {
        AlertDialog.Builder(this).setTitle("Emin misin?").setMessage("Seçilen kitaplar kitaplıktan kaldırılacak.")
         .setPositiveButton("Evet, sil"){_,_->
          selectedDelete.filter{it in books.indices && books[it].path.isNotEmpty()}.sortedDescending().forEach{books[it]=Book("","")}
-         selectedDelete.clear();deleteMode=false;save();home()
+         selectedDelete.clear();books.removeAll{it.path.isEmpty()};deleteMode=false;save();home()
         }.setNegativeButton("Vazgeç"){_,_->scheduleModeTimeout()}.show()
       }.setNegativeButton("İptal"){_,_->scheduleModeTimeout()}.show()
     }
@@ -184,7 +185,7 @@ class MainActivity : Activity() {
  uris.forEach{uri->try{var name="Kitap.pdf";contentResolver.query(uri,null,null,null,null)?.use{if(it.moveToFirst()){val n=it.getColumnIndex(OpenableColumns.DISPLAY_NAME);if(n>=0)name=it.getString(n)}};val f=File(filesDir,"book_${System.nanoTime()}.pdf");contentResolver.openInputStream(uri)!!.use{input->f.outputStream().use{input.copyTo(it)}};val empty=books.indexOfFirst{it.path.isEmpty()};if(empty>=0)books[empty]=Book(name,f.path) else books.add(Book(name,f.path))}catch(e:Exception){Toast.makeText(this,"Dosya eklenemedi: ${e.message}",Toast.LENGTH_LONG).show()}};save();home()
  }else if(requestCode==pickCover&&coverIndex in books.indices){try{val f=File(filesDir,"cover_${System.nanoTime()}.png");contentResolver.openInputStream(data.data!!)!!.use{input->f.outputStream().use{input.copyTo(it)}};books[coverIndex].cover=f.path;save();home()}catch(e:Exception){Toast.makeText(this,"Kapak açılamadı",Toast.LENGTH_SHORT).show()}}}
  private fun closePdf(){try{renderer?.close();descriptor?.close()}catch(_:Exception){};renderer=null;descriptor=null}
- private fun openBook(i:Int){try{closePdf();descriptor=android.os.ParcelFileDescriptor.open(File(books[i].path),android.os.ParcelFileDescriptor.MODE_READ_ONLY);renderer=PdfRenderer(descriptor!!);current=i;page=books[i].bookmark.takeIf{it>=0}?:0;page=page.coerceIn(0,renderer!!.pageCount-1);zoom=1f;reader()}catch(e:Exception){Toast.makeText(this,"PDF açılamadı: ${e.message}",Toast.LENGTH_LONG).show();home()}}
+ private fun openBook(i:Int){if(deleteMode)return;try{closePdf();descriptor=android.os.ParcelFileDescriptor.open(File(books[i].path),android.os.ParcelFileDescriptor.MODE_READ_ONLY);renderer=PdfRenderer(descriptor!!);current=i;page=books[i].bookmark.takeIf{it>=0}?:0;page=page.coerceIn(0,renderer!!.pageCount-1);zoom=1f;reader()}catch(e:Exception){Toast.makeText(this,"PDF açılamadı: ${e.message}",Toast.LENGTH_LONG).show();home()}}
  private fun reader(){
   val r=renderer?:return
   init(books[current].name)
